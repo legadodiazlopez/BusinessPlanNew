@@ -14,7 +14,6 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
-      id-token: write
 
     steps:
     - uses: actions/checkout@v4
@@ -30,16 +29,9 @@ jobs:
     - name: Publish with dotnet
       run: dotnet publish CrownBuilders/CrownBuilders.csproj -c Release -f net9.0-windows10.0.19041.0 -o "${{github.workspace}}/myapp"
 
-    - name: Login to Azure
-      uses: azure/login@v2
-      with:
-        client-id: "${{ secrets.AZUREAPPSERVICE_CLIENTID_CC363CD721BE4F43B376C4DAA362F73 }}"
-        tenant-id: "${{ secrets.AZUREAPPSERVICE_TENANTID_EDB83924834A451DB73C3207875E6760 }}"
-        subscription-id: "${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EDC3610621AE43AA94E2FEE1F51FB5B0 }}"
-
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'crownbuilders-portal'
-        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: '${{github.workspace}}/myapp'
