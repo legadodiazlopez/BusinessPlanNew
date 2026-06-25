@@ -1,0 +1,203 @@
+@page "/registro-trabajador"
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<style>
+    :root {
+        --navy: #0A192F;
+        --gold: #C5A059;
+    }
+    .text-navy { color: var(--navy); }
+    .btn-gold { 
+        background-color: var(--navy); 
+        color: white; 
+        border: 2px solid var(--gold); 
+    }
+    .card-custom { 
+        border: 2px solid var(--gold); 
+        border-radius: 15px; 
+    }
+</style>
+
+<div class="container mt-4">
+    <div class="card p-4 shadow-sm card-custom">
+        <h4 class="text-center text-navy fw-bold mb-4">Registro de Trabajador</h4>
+
+        @if (!string.IsNullOrEmpty(mensajeError)) {
+            <div class="alert alert-danger p-2 small">@mensajeError</div>
+        }
+
+        <div class="text-center mb-3">
+            <label for="fileInput" style="cursor: pointer;">
+                <div style="width: 100px; height: 100px; background-color: #f8f9fa; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--gold);">
+                    <span class="text-muted small">Subir Foto</span>
+                </div>
+            </label>
+            <InputFile id="fileInput" OnChange="CargarFoto" style="display: none;" />
+        </div>
+
+        <div class="mb-2"><label>Nombre Completo</label><input class="form-control" @bind="nombre" /></div>
+        <div class="mb-2"><label>Oficio / Especialidad</label><input class="form-control" @bind="oficio" /></div>
+        
+        <div class="mb-2"><label>Años de Experiencia</label><input type="number" class="form-control" @bind="experiencia" placeholder="0" min="0" /></div>
+        
+        <div class="mb-2"><label>Ciudad (Town)</label><input class="form-control" @bind="ciudad" placeholder="Ej. Shirley, Bohemia, Islip..." /></div>
+        
+        <div class="mb-2"><label>Teléfono</label><input type="number" class="form-control" @bind="telefono" placeholder="Ej. 1234567890" /></div>
+        
+        <div class="mb-2"><label>Correo</label><input class="form-control" @bind="correo" placeholder="nombre@ejemplo.com" /></div>
+        <div class="mb-2"><label>Contraseña</label><input class="form-control" type="password" @bind="password" /></div>
+        
+        <div class="mt-3">
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="c1" @bind="tieneVehiculo"><label class="form-check-label" for="c1">Tiene vehículo propio</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" id="c2" @bind="tieneHerramientas"><label class="form-check-label" for="c2">Tiene herramientas propias</label></div>
+        </div>
+
+        <div class="mt-3 mb-4">
+            <label>Salario esperado ($)</label>
+            <div class="input-group">
+                <input type="number" class="form-control" @bind="salario" placeholder="Monto" min="0" />
+                <select class="form-select"><option>Por hora</option><option>Por jornada</option></select>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            <div class="mb-3">
+                <input type="checkbox" id="verTerminos" class="form-check-input" @onclick="MostrarPrivacidad" />
+                <label class="form-check-label" for="verTerminos" style="cursor:pointer; text-decoration:underline; color:var(--navy);">Ver términos y políticas de privacidad</label>
+            </div>
+            <div class="mb-3">
+                <input type="checkbox" id="aceptarTerminos" class="form-check-input" @bind="aceptaTerminos" />
+                <label class="form-check-label" for="aceptarTerminos">Acepto los términos y condiciones</label>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary w-50" @onclick="Volver">Volver</button>
+            <button class="btn btn-gold w-50 fw-bold" @onclick="IniciarRegistro">Guardar Perfil</button>       
+        </div>
+    </div>
+</div>
+
+@if (mostrandoVerificacion) { 
+    <div class="modal" tabindex="-1" style="display:block; background-color:rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Verificación de Código</h5>
+                </div>
+                <div class="modal-body">
+                    <p>Ingresa el código de verificación (Simulación: usa 1234)</p>
+                    <input class="form-control" @bind="codigoIngresado" placeholder="Código" />
+                    @if (!string.IsNullOrEmpty(mensajeError)) {
+                        <div class="alert alert-danger mt-2 p-1 small">@mensajeError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="VerificarCodigo">Validar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool mostrandoVerificacion = false;
+    private string codigoIngresado, mensajeError;
+    private string nombre, oficio, ciudad, correo, password;
+    private int? experiencia;
+    private long? telefono;
+    private decimal? salario;
+    private bool tieneVehiculo, tieneHerramientas, aceptaTerminos;
+
+    private async Task IniciarRegistro() 
+    {
+        // 1. Validar campos vacíos obligatorios (se incluye ciudad)
+        if (string.IsNullOrWhiteSpace(nombre) || !telefono.HasValue || 
+            string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(ciudad))
+        {
+            mensajeError = "Por favor, completa todos los campos obligatorios (Nombre, Ciudad, Teléfono, Correo, Contraseña).";
+            return;
+        }
+
+        // 2. Validar formato de correo electrónico
+        if (!EsCorreoValido(correo))
+        {
+            mensajeError = "El formato del correo electrónico no es válido.";
+            return;
+        }
+
+        // 3. Validar aceptación de términos
+        if (!aceptaTerminos)
+        {
+            mensajeError = "Debes aceptar los términos y condiciones para continuar.";
+            return;
+        }
+
+        mensajeError = "";
+
+        // 4. Guardar en Base de Datos Local (SQLite)
+        try
+        {
+            var nuevoTrabajador = new CrownBuilders.Trabajador
+            {
+                Nombre = nombre,
+                Ciudad = ciudad,       // <- Se guarda la ciudad ingresada
+                Correo = correo,
+                Password = password
+            };
+
+            await CrownBuilders.DatabaseHelper.GuardarTrabajadorAsync(nuevoTrabajador);
+            
+            // Éxito al guardar, mostramos el modal para ingresar el código de validación
+            mostrandoVerificacion = true;
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "Error al guardar el perfil en la base de datos.";
+            Console.WriteLine(ex.Message);
+        }
+    }
+
+    // Función auxiliar para validar correo
+    private bool EsCorreoValido(string email)
+    {
+        try
+        {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void VerificarCodigo()
+    {
+        if (codigoIngresado == "1234") // Simulación
+        {
+            mostrandoVerificacion = false;
+            Navigation.NavigateTo("/companias-disponibles");
+        }
+        else { mensajeError = "Código incorrecto."; }
+    }
+
+    private async Task MostrarPrivacidad()
+    {
+        string textoLegal = "TÉRMINOS DE USO Y PRIVACIDAD DE CROWN BUILDERS\n\n" +
+        "1. PRIVACIDAD: Tus datos son sagrados. Nunca serán vendidos, compartidos ni comercializados.\n" +
+        "2. SEGURIDAD: Toda tu actividad está protegida con cifrado de nivel bancario.\n" +
+        "3. CONEXIÓN: Crown Builders es una herramienta tecnológica para conectar personas. No somos parte de los acuerdos, contratos o pagos realizados entre usuarios. Tú decides con quién trabajar y bajo qué términos.\n" +
+        "4. RESPONSABILIDAD: Trabajamos constantemente para validar perfiles y asegurar una comunidad de confianza. Sin embargo, al ser una plataforma abierta, cada usuario es responsable de verificar con quién interactúa y de sus propias acciones.\n" +
+        "5. EDAD: Al registrarte, confirmas ser mayor de 18 años.\n" +
+        "6. TRANSPARENCIA: Sin letras pequeñas. Nuestra intención es facilitarte el trabajo, no complicarte con burocracia.\n" +
+        "7. PAGOS Y CANCELACIONES: Tu facturación es mensual basada en tu fecha de registro. Puedes eliminar tu cuenta en cualquier momento; el acceso se restringirá de inmediato. No realizamos reembolsos. Si decides cancelar, el acceso continuará hasta el final del periodo ya pagado. Recomendamos gestionar la baja un día antes de tu fecha de cobro.\n\n" +
+        "CROWN BUILDERS: Devolviendo la corona a la clase que la merece.";
+
+        await JS.InvokeVoidAsync("alert", textoLegal);
+    }
+
+    private async Task CargarFoto(InputFileChangeEventArgs e) => Console.WriteLine("Foto seleccionada");
+    private void Volver() => Navigation.NavigateTo("/login-trabajador");
+}

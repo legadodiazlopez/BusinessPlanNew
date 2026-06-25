@@ -1,0 +1,82 @@
+@page "/login-trabajador"
+@inject NavigationManager Navigation
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card p-4 shadow-sm" style="border-radius: 15px;">
+                <div class="text-center mb-4">
+                    <h3 style="color: #1a2b4e;">Acceso Trabajador</h3>
+                    <p class="text-muted">Ingresa a tu perfil profesional</p>
+                </div>
+
+                @if (!string.IsNullOrEmpty(mensajeError))
+                {
+                    <div class="alert alert-danger" style="font-size: 0.85em; padding: 10px; margin-bottom: 15px;">
+                        @mensajeError
+                    </div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Correo electrónico</label>
+                    <input type="email" class="form-control" @bind="email" placeholder="nombre@ejemplo.com" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Contraseña</label>
+                    <input type="password" class="form-control" @bind="password" placeholder="**" />
+                </div>
+
+                <button class="btn w-100 mt-3" style="background-color: #1a2b4e; color: white;" @onclick="HandleLogin">
+                    Ingresar
+                </button>
+
+                <div class="text-center mt-4 p-2" style="border-top: 1px solid #dee2e6;">
+                    <span class="text-muted">¿No tienes cuenta?</span>
+                    <a href="registro-trabajador" class="fw-bold" style="color: #C5A059; text-decoration: underline; display: block; margin-top: 5px;">
+                        NO TIENES CUENTA?/ REGÍSTRATE AQUÍ
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email;
+    private string password;
+    private string mensajeError;
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            // Validar campos vacíos
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            {
+                mensajeError = "Por favor, ingresa tu correo y contraseña.";
+                return;
+            }
+
+            // Llamamos a tu base de datos SQLite usando el validador específico de trabajadores
+            var trabajadorValidado = await CrownBuilders.DatabaseHelper.ValidarCredencialesTrabajadorAsync(email, password);
+
+            if (trabajadorValidado != null)
+            {
+                // Si encuentra un registro, las credenciales son correctas
+                mensajeError = "";
+                Navigation.NavigateTo("/companias-disponibles");
+            }
+            else
+            {
+                // Si devuelve null, el usuario o contraseña no coinciden
+                mensajeError = "Usuario o contraseña incorrectos.";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "Error al conectar con la base de datos.";
+            Console.WriteLine(ex.Message); // Esto evita que la app se bloquee
+        }
+    }
+}

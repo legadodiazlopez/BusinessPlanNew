@@ -1,0 +1,55 @@
+﻿@inherits LayoutComponentBase
+@using CrownBuilders;
+@using System.Globalization
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <article class="content px-4">
+            <ErrorBoundary>
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent Context="ex">
+                    <div style="background-color: #ffdddd; padding: 20px; border: 2px solid red; border-radius: 10px; margin-top: 20px;">
+                        <h4 style="color: red; font-weight: bold;">🚨 Error Interno Detectado 🚨</h4>
+                        <p><strong>Mensaje:</strong> @ex.Message</p>
+                        <p style="font-size: 11px; overflow-wrap: break-word;"><strong>Ruta:</strong> @ex.StackTrace</p>
+                    </div>
+                </ErrorContent>
+            </ErrorBoundary>
+        </article>
+    </main>
+</div>
+
+@code {
+    // 1. Configuración de idioma detectado automáticamente
+    protected override void OnInitialized()
+    {
+        var cultureInfo = CultureInfo.CurrentCulture;
+        
+        // Forzamos la cultura detectada para que toda la App (números, fechas, textos)
+        // se comporte según el idioma del teléfono del usuario.
+        CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+        CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+    }
+
+    // 2. Inicialización de base de datos segura
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await DatabaseHelper.InitAsync();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error al inicializar SQLite: {ex.Message}");
+            }
+        }
+    }
+}

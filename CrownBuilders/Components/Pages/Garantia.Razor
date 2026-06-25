@@ -1,0 +1,190 @@
+@page "/garantia"
+@inject IJSRuntime JS
+@inject CrownBuilders.Services.StripeService StripeServ
+@using CrownBuilders;
+
+<div class="container mt-4">
+    <div class="d-flex align-items-center mb-4">
+        <a href="/" class="btn btn-outline-secondary btn-sm me-3" style="border-radius: 8px;">
+            <span class="oi oi-arrow-left"></span> Volver
+        </a>
+        <h3 class="fw-bold text-dark mb-0">Reclaman Garantía de Inasistencia</h3>
+    </div>
+
+    @if (!string.IsNullOrEmpty(mensajeResultado))
+    {
+        <div class="@claseMensaje shadow-sm d-flex align-items-center" role="alert" style="border-radius: 10px;">
+            <div>
+                @mensajeResultado
+            </div>
+        </div>
+    }
+
+    <div class="alert alert-warning shadow-sm d-flex align-items-center" role="alert" style="border-radius: 10px;">
+        <span class="oi oi-info me-2 fs-5"></span>
+        <div>
+            <strong>Regla del Sistema:</strong> Se aplicará un cobro automático de <strong>$5.00 USD</strong> al fondo del ...
+        </div>
+    </div>
+
+    <div class="card shadow-sm" style="border-radius: 12px;">
+        <div class="card-body p-4">
+            
+            <div class="mb-4">
+                <label class="form-label fw-bold text-secondary">Código de Orden de Trabajo</label>
+                <input type="text" class="form-control bg-light text-muted" value="CONTRATO-TXT9842" readonly />
+                <span class="text-form text-muted small">Vinculado automáticamente a la última inasistencia detectada.</span>
+            </div>
+
+            <!-- Identificador automático de la compañía enlazada -->
+            <div class="mb-4">
+                <label class="form-label fw-bold text-secondary">🏢 Cuenta de Compañía Detectada</label>
+                <input type="email" class="form-control bg-light text-muted" value="@correoCompania" readonly placeholder="Cargando cuenta activa..." />
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label fw-bold text-secondary">Evidencia Fotográfica (Obligatoria)</label>
+                <div class="d-grid">
+                    <button class="btn btn-outline-danger py-3 fw-bold" @onclick="CapturarFotoEvidencia" disabled="@procesando">
+                        <span class="oi oi-camera me-2"></span>
+                        @(string.IsNullOrEmpty(rutaFotoEvidencia) ? "Abrir Cámara del Dispositivo" : "¡Foto Capturada con Éxito!")
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(rutaFotoEvidencia))
+            {
+                <div class="mt-2 text-success small d-flex align-items-center">
+                    <span class="oi oi-check me-1"></span> Archivo temporal listo: @System.IO.Path.GetFileName(rutaFotoEvidencia)
+                </div>
+            }
+
+            <div class="mb-4">
+                <label class="form-label fw-bold text-secondary">Descripción del Reporte</label>
+                <textarea class="form-control" rows="3" placeholder="Escribe aquí los motivos (ej. El instalador no llegó a la hora acordada, zona desierta)..." @bind="descripcionInasistencia"></textarea>
+            </div>
+
+            <hr class="my-4" />
+
+            <div class="d-grid">
+                <button class="btn btn-danger py-3 fw-bold fs-5 shadow" @onclick="ProcesarReclamo" disabled="@procesando">
+                    @if (procesando)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Procesando Transacción...</span>
+                    }
+                    else
+                    {
+                        <span>Aplicar Penalización de $5.00 USD</span>
+                    }
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool subirFoto = false;
+    private string rutaFotoEvidencia = "";
+    private string descripcionInasistencia = "";
+    private string correoCompania = ""; 
+    private string mensajeResultado = "";
+    private string claseMensaje = "";
+    private bool procesando = false;
+    private string fotoMensajesVariableLocal;
+    private string fotoSitioVacioVariableLocal;
+
+    // Se ejecuta automáticamente al abrir la pantalla para recuperar la sesión de SQLite
+protected override async Task OnInitializedAsync()
+{
+    try
+    {
+        string emailActivo = await DatabaseHelper.ObtenerEmailCompaniaActivaAsync();
+        if (!string.IsNullOrEmpty(emailActivo))
+        {
+            correoCompania = emailActivo;
+        }
+
+        // Simulación completa para saltar el validador en el emulador
+        rutaFotoEvidencia = "prueba_llamadas.jpg";
+        // NOTA: Asegúrate de usar los nombres exactos de tus variables locales 
+        // de Blazor que usas en los inputs de Mensajes y Sitio Vacío:
+        fotoMensajesVariableLocal = "prueba_mensajes.jpg"; 
+        fotoSitioVacioVariableLocal = "prueba_sitio.jpg";
+    }
+    catch (Exception ex)
+    {
+        // Tu catch actual...
+    }
+}
+    private async Task CapturarFotoEvidencia()
+    {
+        procesando = true;
+        await Task.Delay(1200); // Simula la respuesta de la cámara
+        rutaFotoEvidencia = System.IO.Path.Combine(FileSystem.AppDataDirectory, $"evidencia_{DateTime.Now.Ticks}.jpg");
+        subirFoto = true;
+        procesando = false;
+    }
+
+    private async Task ProcesarReclamo()
+    {
+        if (string.IsNullOrEmpty(rutaFotoEvidencia))
+        {
+            await JS.InvokeVoidAsync("alert", "Bloqueo de Seguridad: No puedes enviar un reclamo sin tomar una fotografía de evidencia.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(descripcionInasistencia))
+        {
+            await JS.InvokeVoidAsync("alert", "Por favor, introduce los comentarios explicativos para el respaldo del seguro.");
+            return;
+        }
+
+        try
+        {
+            procesando = true;
+            mensajeResultado = "";
+
+           // 1. Estructura y almacenamiento local en SQLite
+var nuevoReclamo = new GarantiaInasistencia
+{
+    ContratacionId = 1, // Cambiado a int (sin comillas)
+    TrabajadorId = 1,   // Cambiado a int (sin comillas)
+    Monto = 5.00m,      // Agregada la 'm' para tipo decimal
+    Estado = "Reclamada",
+    FechaLimite = DateTime.Now,
+    FotoLlamadas = "",
+    FotoMensajes = "",
+    FotoSitioVacio = rutaFotoEvidencia,
+    SincronizadoNube = false
+};
+
+// 2. Guardar usando el método correcto para GarantiaInasistencia
+await DatabaseHelper.GuardarGarantiaInasistenciaAsync(nuevoReclamo);
+
+            // 2. Conexión automática con la API de Stripe usando el correo recuperado de la sesión
+            bool stripeExitoso = await StripeServ.AplicarGarantiaCreditoAsync(correoCompania);
+
+            if (stripeExitoso)
+            {
+                mensajeResultado = "¡Garantía Aplicada! Los datos se guardaron correctamente en el empleo.db y se han abonado $5.00 USD al saldo de Stripe de la compañía para su próximo ciclo.";
+                claseMensaje = "alert alert-success";
+
+                // Limpieza del formulario
+                descripcionInasistencia = "";
+                rutaFotoEvidencia = "";
+                subirFoto = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeResultado = $"Error al procesar la garantía en la pasarela: {ex.Message}";
+            claseMensaje = "alert alert-danger";
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+}

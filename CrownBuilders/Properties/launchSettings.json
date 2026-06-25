@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "CrownBuilders": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "launchUrl": "",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    },
+    "MsixPackage": {
+      "commandName": "MsixPackage",
+      "nativeDebugging": false
+    }
+  }
+}

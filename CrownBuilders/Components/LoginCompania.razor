@@ -1,0 +1,107 @@
+﻿@page "/login-compania"
+@using CrownBuilders
+@inject NavigationManager Navigation
+
+<style>
+    :root {
+        --navy: #0A192F;
+        --gold: #C5A059;
+    }
+    .btn-custom { background-color: var(--navy); color: white; border: none; }
+    .btn-custom:hover { background-color: var(--gold); color: var(--navy); }
+    .text-gold { color: var(--gold); }
+    .text-navy { color: var(--navy); }
+    .bg-navy { background-color: var(--navy); }
+    .border-gold { border: 1px solid var(--gold); }
+</style>
+
+<div class="container mt-4 px-3">
+    <div class="mb-3">
+        <button @onclick="VolverAlHome" class="btn btn-outline-dark btn-sm" style="border-radius: 8px;">
+            <i class="oi oi-arrow-left"></i> Volver
+        </button>
+    </div>
+
+    <div class="text-center mb-4">
+        <div class="bg-navy text-gold rounded-circle d-inline-flex p-3 mb-2 shadow-sm border-gold">
+            <i class="oi oi-briefcase fs-2"></i>
+        </div>
+        <h2 class="fs-3 fw-bold text-navy mb-1">Portal de Compañías</h2>
+        <p class="text-muted small px-3">Ingresa tus credenciales para administrar tus ofertas y candidatos.</p>
+    </div>
+
+    <div class="card border-gold shadow-sm p-3 mb-4" style="border-radius: 16px;">
+        <div class="card-body p-2">
+            @if (!string.IsNullOrEmpty(mensajeError))
+            {
+                <div class="p-2 small text-center rounded-3 mb-3" style="background-color: #fcefdc; color: var(--navy); border: 1px solid var(--gold);">
+                    <i class="oi oi-warning me-1"></i> @mensajeError
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="form-label small fw-bold text-navy">Correo Electrónico</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-navy border-end-0"><i class="oi oi-envelope-closed"></i></span>
+                    <input type="email" class="form-control bg-light border-start-0" placeholder="ejemplo@compania.com" @bind="correo" />
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label class="form-label small fw-bold text-navy">Contraseña</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-light text-navy border-end-0"><i class="oi oi-lock-locked"></i></span>
+                    <input type="password" class="form-control bg-light border-start-0" placeholder="**" @bind="password" />
+                </div>
+            </div>
+
+            <button @onclick="ProcesarLogin" class="btn btn-custom w-100 py-2 fw-bold shadow-sm mb-2" style="border-radius: 8px;">
+                Iniciar Sesión <i class="oi oi-account-login ms-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="text-center py-2">
+        <p class="text-muted small mb-1">¿Tu compañía aún no tiene cuenta?</p>
+        <button @onclick="IrARegistroCompania" class="btn btn-link text-gold fw-bold small p-0 text-decoration-none">
+            Crear un perfil corporativo aquí
+        </button>
+    </div>
+</div>
+
+@code {
+    private string correo = "";
+    private string password = "";
+    private string mensajeError = "";
+
+    private void IrARegistroCompania() => Navigation.NavigateTo("/registro-compania");
+    private void VolverAlHome() => Navigation.NavigateTo("/");
+
+    private async Task ProcesarLogin()
+    {
+        if (string.IsNullOrEmpty(correo) || string.IsNullOrEmpty(password))
+        {
+            mensajeError = "Por favor, completa todos los campos.";
+            return;
+        }
+        
+        mensajeError = "";
+
+        // 1. Obtenemos el perfil guardado en la base de datos local
+        var perfilGuardado = await DatabaseHelper.ObtenerPerfilCompaniaAsync();
+
+        // 2. Validamos si existe un perfil y si las credenciales coinciden exactamente
+        if (perfilGuardado != null && 
+            perfilGuardado.Correo == correo && 
+            perfilGuardado.Password == password)
+        {
+            // Las credenciales son correctas y el perfil existe
+            Navigation.NavigateTo("/portal-compania");
+        }
+        else 
+        { 
+            // El correo/contraseña no coincide o no hay cuenta registrada
+            mensajeError = "El correo o la contraseña son incorrectos, o la cuenta no existe."; 
+        }
+    }
+}

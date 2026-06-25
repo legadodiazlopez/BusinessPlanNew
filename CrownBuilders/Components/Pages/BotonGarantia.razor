@@ -1,0 +1,209 @@
+@page "/boton-garantia"
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@using CrownBuilders;
+
+<div class="container mt-3 px-2" style="max-height: 100vh; overflow-y: auto; padding-bottom: 30px;">
+    
+    <div class="card m-auto p-3 shadow-sm" style="max-width: 500px; border-radius: 12px; background: #ffffff;">
+        
+        @* Encabezado con botón de volver *@
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" @onclick="VolverAlPortal">⬅️</button>
+            <h5 class="card-title fw-bold text-dark mb-0">Garantía por Inasistencia</h5>
+        </div>
+
+        <p class="text-muted small mb-3">
+            Monto asegurable: <strong class="text-success">$5.00 USD</strong><br />
+            Se requiere activar las barreras de evidencia física obligatoria en el sitio para proceder.
+        </p>
+        
+        <hr />
+
+        @* BLOQUE 1: CAPTURA DE LLAMADAS *@
+        <div class="mb-3 text-center">
+            <label class="form-label small fw-bold d-block text-start text-secondary">📞 1. Captura de Llamadas al Trabajador</label>
+            @if (string.IsNullOrEmpty(imagenLlamadas))
+            {
+                <div class="position-relative">
+                    <InputFile OnChange="CargarLlamadas" class="form-control form-control-sm position-absolute top-0 start-0 opacity-0 h-100 w-100" style="cursor: pointer; z-index: 2;" disabled="@procesando" />
+                    <button class="btn btn-sm btn-outline-primary w-100 py-2" style="border-radius: 8px; border-style: dashed;">
+                        📁 Subir Captura de Llamadas
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="position-relative d-inline-block mt-1 bg-light p-2 rounded border" style="max-width: 100%;">
+                    <img src="@imagenLlamadas" style="max-height: 120px; border-radius: 8px; object-fit: contain;" />
+                    <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle py-0 px-1 text-white fw-bold" style="transform: translate(30%, -30%); font-size: 0.75rem;" @onclick="EliminarLlamadas" disabled="@procesando">❌</button>
+                </div>
+            }
+        </div>
+
+        @* BLOQUE 2: CAPTURA DE MENSAJES *@
+        <div class="mb-3 text-center">
+            <label class="form-label small fw-bold d-block text-start text-secondary">💬 2. Captura de Mensajes sin Responder</label>
+            @if (string.IsNullOrEmpty(imagenMensajes))
+            {
+                <div class="position-relative">
+                    <InputFile OnChange="CargarMensajes" class="form-control form-control-sm position-absolute top-0 start-0 opacity-0 h-100 w-100" style="cursor: pointer; z-index: 2;" disabled="@procesando" />
+                    <button class="btn btn-sm btn-outline-primary w-100 py-2" style="border-radius: 8px; border-style: dashed;">
+                        📁 Subir Captura de Mensajes
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="position-relative d-inline-block mt-1 bg-light p-2 rounded border" style="max-width: 100%;">
+                    <img src="@imagenMensajes" style="max-height: 120px; border-radius: 8px; object-fit: contain;" />
+                    <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle py-0 px-1 text-white fw-bold" style="transform: translate(30%, -30%); font-size: 0.75rem;" @onclick="EliminarMensajes" disabled="@procesando">❌</button>
+                </div>
+            }
+        </div>
+
+        @* BLOQUE 3: FOTO DEL SITIO VACÍO *@
+        <div class="mb-4 text-center">
+            <label class="form-label small fw-bold d-block text-start text-secondary">🏗️ 3. Foto de Evidencia del Sitio Vacío</label>
+            @if (string.IsNullOrEmpty(imagenSitioVacio))
+            {
+                <div class="position-relative">
+                    <InputFile OnChange="CargarSitioVacio" class="form-control form-control-sm position-absolute top-0 start-0 opacity-0 h-100 w-100" style="cursor: pointer; z-index: 2;" disabled="@procesando" />
+                    <button class="btn btn-sm btn-outline-primary w-100 py-2" style="border-radius: 8px; border-style: dashed;">
+                        📸 Tomar / Subir Foto de Sitio Vacío
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="position-relative d-inline-block mt-1 bg-light p-2 rounded border" style="max-width: 100%;">
+                    <img src="@imagenSitioVacio" style="max-height: 120px; border-radius: 8px; object-fit: contain;" />
+                    <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 rounded-circle py-0 px-1 text-white fw-bold" style="transform: translate(30%, -30%); font-size: 0.75rem;" @onclick="EliminarSitioVacio" disabled="@procesando">❌</button>
+                </div>
+            }
+        </div>
+
+        @* Botón de Acción Principal *@
+        <button class="btn btn-danger w-100 fw-bold py-2 shadow-sm" style="background-color: #d9534f; border: none; border-radius: 8px;" @onclick="ProcesarReclamo" disabled="@procesando">
+            @if (procesando)
+            {
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <span> Procesando...</span>
+            }
+            else
+            {
+                <span>Reclamos Garantía de $5.00</span>
+            }
+        </button>
+
+    </div>
+</div>
+
+@code {
+    private bool procesando = false;
+    
+    // Variables de almacenamiento temporal en Base64
+    private string imagenLlamadas = "";
+    private string imagenMensajes = "";
+    private string imagenSitioVacio = "";
+
+    // Límite máximo de bytes (500 KB) para mitigar el peso en SQLite
+    private long maxSizeBytes = 500 * 1024;
+
+    private void VolverAlPortal()
+    {
+        Navigation.NavigateTo("/portal-compania");
+    }
+
+    private async Task CargarLlamadas(InputFileChangeEventArgs e)
+    {
+        imagenLlamadas = await ProcesarArchivoEvidencia(e.File);
+    }
+
+    private async Task CargarMensajes(InputFileChangeEventArgs e)
+    {
+        imagenMensajes = await ProcesarArchivoEvidencia(e.File);
+    }
+
+    private async Task CargarSitioVacio(InputFileChangeEventArgs e)
+    {
+        imagenSitioVacio = await ProcesarArchivoEvidencia(e.File);
+    }
+
+    private async Task<string> ProcesarArchivoEvidencia(IBrowserFile archivo)
+    {
+        if (archivo == null) return "";
+
+        try
+        {
+            procesando = true;
+            using var stream = archivo.OpenReadStream(maxSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            
+            var bytes = ms.ToArray();
+            return $"data:{archivo.ContentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (Exception)
+        {
+            await JS.InvokeVoidAsync("alert", "El archivo seleccionado es demasiado pesado. Intente con una captura de pantalla o una foto comprimida.");
+            return "";
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+
+    private void EliminarLlamadas() => imagenLlamadas = "";
+    private void EliminarMensajes() => imagenMensajes = "";
+    private void EliminarSitioVacio() => imagenSitioVacio = "";
+
+    private async Task ProcesarReclamo()
+    {
+        // Validación estricta de las tres barreras físicas obligatorias
+        if (string.IsNullOrEmpty(imagenLlamadas) || string.IsNullOrEmpty(imagenMensajes) || string.IsNullOrEmpty(imagenSitioVacio))
+        {
+            await JS.InvokeVoidAsync("alert", "Bloqueo de Seguridad: Es obligatorio subir los tres comprobantes (Llamadas, Mensajes y Sitio Vacío) para proceder.");
+            return;
+        }
+
+        try
+        {
+            procesando = true;
+
+            // Instanciar el nuevo modelo con los datos recolectados
+            var nuevoReclamo = new GarantiaInasistencia
+            {
+                Monto = 5.00M,
+                Estado = "Pendiente",
+                FechaLimite = DateTime.Now.AddDays(7),
+                FotoLlamadas = imagenLlamadas,
+                FotoMensajes = imagenMensajes,
+                FotoSitioVacio = imagenSitioVacio,
+                SincronizadoNube = false
+            };
+
+            // Guardar físicamente en empleo.db a través del DatabaseHelper estático
+            await DatabaseHelper.GuardarGarantiaInasistenciaAsync(nuevoReclamo);
+
+            await JS.InvokeVoidAsync("alert", "Éxito: Reclamo de garantía de $5.00 guardado localmente en empleo.db para revisión manual.");
+
+            // Limpiar formulario
+            imagenLlamadas = "";
+            imagenMensajes = "";
+            imagenSitioVacio = "";
+            
+            // Redirigir al portal de la compañía
+            Navigation.NavigateTo("/portal-compania");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("alert", $"Error al guardar el reclamo: {ex.Message}");
+        }
+        finally
+        {
+            procesando = false;
+        }
+    }
+}

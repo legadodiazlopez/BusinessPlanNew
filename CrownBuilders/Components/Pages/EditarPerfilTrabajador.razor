@@ -1,0 +1,104 @@
+@page "/editar-perfil"
+@using CrownBuilders
+@using Microsoft.Maui.Media
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<style>
+    :root { --navy: #0A192F; --gold: #C5A059; }
+    .card-custom { border: 2px solid var(--gold); border-radius: 15px; }
+    .btn-gold { background-color: var(--navy); color: white; border: 2px solid var(--gold); }
+</style>
+
+<div class="container mt-4 mb-5">
+    <h3 class="fw-bold text-navy mb-4">Editar Perfil</h3>
+
+    <div class="card p-4 shadow-sm card-custom">
+        <div class="text-center mb-4">
+            <div style="width: 100px; height: 100px; background: #ddd; border-radius: 50%; margin: 0 auto; cursor: pointer; display: flex; justify-content: center; align-items: center;" 
+                 class="mb-2" @onclick="SeleccionarFoto">
+                <span class="text-muted">Foto</span>
+            </div>
+            <small class="text-muted">Presiona el círculo para cambiar</small>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Nombre Completo</label>
+            <input type="text" class="form-control" @bind="trabajador.Nombre" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Ciudad (Town)</label>
+            <input type="text" class="form-control" @bind="trabajador.Ciudad" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Años de experiencia</label>
+            <input type="number" class="form-control" @bind="trabajador.AniosExperiencia" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Correo Electrónico</label>
+            <input type="email" class="form-control" @bind="trabajador.Correo" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Teléfono</label>
+            <input type="tel" class="form-control" @bind="trabajador.Telefono" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Nueva Contraseña</label>
+            <input type="password" class="form-control" @bind="trabajador.Password" />
+        </div>
+
+        <div class="mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" @bind="trabajador.TieneVehiculo" />
+                <label class="form-check-label">¿Cuenta con vehículo propio?</label>
+            </div>
+            <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" @bind="trabajador.TieneHerramientas" />
+                <label class="form-check-label">¿Cuenta con herramientas propias?</label>
+            </div>
+        </div>
+
+        <button class="btn btn-gold w-100 fw-bold mt-3" @onclick="GuardarDatos">Guardar Cambios</button>
+        <button class="btn btn-outline-secondary w-100 mt-2" @onclick="Cancelar">Cancelar</button>
+    </div>
+</div>
+
+@code {
+    private Trabajador trabajador = new Trabajador();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var lista = await DatabaseHelper.ObtenerTrabajadoresAsync();
+        if (lista.Count > 0)
+        {
+            trabajador = lista[0];
+        }
+    }
+
+    private async Task SeleccionarFoto()
+    {
+        try {
+            var photo = await MediaPicker.Default.PickPhotoAsync();
+            if (photo != null) {
+                await JS.InvokeVoidAsync("alert", "Foto seleccionada.");
+            }
+        } catch (Exception ex) {
+            await JS.InvokeVoidAsync("alert", "Error: " + ex.Message);
+        }
+    }
+
+    private async Task GuardarDatos()
+    {
+        try {
+            // Se corrigió para llamar directamente al actualizador en lugar de insertar de nuevo
+            await DatabaseHelper.ActualizarTrabajadorAsync(trabajador);
+            
+            await JS.InvokeVoidAsync("alert", "Perfil actualizado correctamente.");
+            Navigation.NavigateTo("/companias-disponibles");
+        } catch (Exception) {
+            await JS.InvokeVoidAsync("alert", "Error al guardar los cambios.");
+        }
+    }
+
+    private void Cancelar() => Navigation.NavigateTo("/companias-disponibles");
+}

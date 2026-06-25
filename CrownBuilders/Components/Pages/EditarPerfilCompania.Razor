@@ -1,0 +1,160 @@
+@page "/editar-perfil-compania"
+@using CrownBuilders
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<div class="container mt-4">
+    <h3>Editar Perfil de Compañía</h3>
+
+    @if (!string.IsNullOrEmpty(mensajeError))
+    {
+        <div class="alert alert-danger">@mensajeError</div>
+    }
+
+    <div class="mb-3 text-center mb-4">
+        <div class="position-relative d-inline-block" style="width: 130px; height: 130px;">
+            <label for="fotoUpload" class="d-block w-100 h-100 rounded-circle overflow-hidden border border-4 shadow-sm" style="border-color: #C5A059 !important; cursor: pointer; background-color: #f8f9fa; display: flex; align-items: center; justify-content: center;">
+                @if (!string.IsNullOrEmpty(perfil.FotoPerfil))
+                {
+                    <img src="@perfil.FotoPerfil" style="width: 100%; height: 100%; object-fit: cover;" />
+                }
+                else
+                {
+                    <span class="text-muted small" style="font-size: 0.85em; text-align: center; color: #C5A059; font-weight: bold;">Cambiar Foto</span>
+                }
+            </label>
+            <InputFile id="fotoUpload" OnChange="HandleFotoUpload" class="d-none" />
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label>Nombre de la Empresa</label>
+        <input class="form-control" @bind="perfil.NombreEmpresa" />
+        
+        <label>Especialidad</label>
+        <input class="form-control" @bind="perfil.Especialidad" />
+        
+        <label>Ciudad</label>
+        <input class="form-control" @bind="perfil.Ciudad" />
+        
+        <label>Correo Electrónico</label>
+        <input class="form-control" type="email" @bind="perfil.Correo" placeholder="correo@dominio.com" />
+        
+        <label>Teléfono</label>
+        <input class="form-control" type="tel" inputmode="numeric" pattern="[0-9]*" @bind="perfil.Telefono" placeholder="Solo números" />
+
+        <label>Contraseña</label>
+        <input type="password" class="form-control" @bind="perfil.Password" />
+        
+        <label>Forma de Pago</label>
+        <select class="form-control" @bind="perfil.FormaPago">
+            <option value="PorHora">Por Hora</option>
+            <option value="PorJornada">Por Jornada</option>
+        </select>
+        
+        <label>Monto a Pagar ($)</label>
+        <input class="form-control" type="number" min="0" @bind="perfil.MontoPago" />
+        
+        <label>Nombre del Titular</label>
+        <input class="form-control" @bind="perfil.NombreTitular" />
+        
+        <label>Número de Tarjeta</label>
+        <input class="form-control" inputmode="numeric" pattern="[0-9]*" @bind="perfil.NumeroTarjeta" placeholder="Solo números" />
+        
+        <label>Expiración (MM/AA)</label>
+        <input class="form-control" @bind="perfil.FechaExpiracion" placeholder="12/28" />
+        
+        <label>Código de Seguridad (CVC)</label>
+        <input class="form-control" type="password" inputmode="numeric" pattern="[0-9]" maxlength="4" @bind="perfil.CVC" placeholder="**" />
+    </div>
+
+    <div class="d-flex mt-4">
+        <button class="btn text-white fw-bold" style="background-color: #0A1128;" @onclick="GuardarCambios">Guardar Cambios</button>
+        <button class="btn text-white fw-bold ms-2" style="background-color: #D4AF37;" @onclick="Cancelar">Cancelar</button>
+    </div>
+</div>
+
+@code {
+    private PerfilCompania perfil = new PerfilCompania();
+    private string mensajeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Auto-rellenado: intenta cargar los datos al iniciar
+        var datosCargados = await DatabaseHelper.ObtenerPerfilCompaniaAsync();
+        if (datosCargados != null)
+        {
+            perfil = datosCargados;
+        }
+    }
+
+    private bool EsCorreoValido(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        try {
+            var addr = new System.Net.Mail.MailAddress(email);
+            return addr.Address == email && email.Contains(".");
+        } catch {
+            return false;
+        }
+    }
+
+    private async Task HandleFotoUpload(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        var format = "image/png";
+        var resizedImage = await file.RequestImageFileAsync(format, 200, 200);
+        var buffer = new byte[resizedImage.Size];
+        await resizedImage.OpenReadStream().ReadAsync(buffer);
+        var imageData = $"data:{format};base64,{Convert.ToBase64String(buffer)}";
+        perfil.FotoPerfil = imageData;
+    }
+
+    private async Task GuardarCambios()
+    {
+        // Validación de campos vacíos obligatorios
+        if (string.IsNullOrWhiteSpace(perfil.NombreEmpresa) || 
+            string.IsNullOrWhiteSpace(perfil.Correo) || 
+            string.IsNullOrWhiteSpace(perfil.Telefono))
+        {
+            mensajeError = "Por favor, completa los campos obligatorios (Empresa, Correo y Teléfono).";
+            return;
+        }
+
+        if (!EsCorreoValido(perfil.Correo))
+        {
+            mensajeError = "Por favor, ingresa un correo electrónico válido que incluya el '@' y el dominio (ej. correo@gmail.com).";
+            return;
+        }
+
+        // Bloqueos numéricos
+        if (!long.TryParse(perfil.Telefono, out _))
+        {
+            mensajeError = "El campo Teléfono solo puede contener números enteros.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(perfil.NumeroTarjeta) && !long.TryParse(perfil.NumeroTarjeta, out _))
+        {
+            mensajeError = "El campo Número de Tarjeta solo puede contener números enteros.";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(perfil.CVC) && !int.TryParse(perfil.CVC, out _))
+        {
+            mensajeError = "El campo Código de Seguridad (CVC) solo puede contener números enteros.";
+            return;
+        }
+
+        mensajeError = "";
+
+        await DatabaseHelper.GuardarPerfilCompaniaAsync(perfil);
+        await JS.InvokeVoidAsync("alert", "Perfil actualizado con éxito");
+        Navigation.NavigateTo("/portal-compania");
+    }
+
+    private void Cancelar()
+    {
+        Navigation.NavigateTo("/portal-compania");
+    }
+}
