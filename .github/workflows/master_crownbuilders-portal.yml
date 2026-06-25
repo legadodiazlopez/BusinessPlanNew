@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy ASP.Net Core app to Azure Web App - crownbuilders-portal
+name: Build and deploy .NET Core app to Azure Web App - crownbuilders-portal
 
 on:
   push:
@@ -10,56 +10,36 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build_and_deploy:
     runs-on: windows-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
+      id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Set up .NET Core
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.x'
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.x'
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
+    - name: Build with dotnet
+      run: dotnet build --configuration Release
 
-      - name: dotnet publish
-       run: dotnet publish CrownBuilders/CrownBuilders.csproj -c Release -f net9.0-windows10.0.19041.0 -o "${{env.DOTNET_ROOT}}/myapp"
+    - name: Publish with dotnet
+      run: dotnet publish CrownBuilders/CrownBuilders.csproj -c Release -f net9.0-windows10.0.19041.0 -o "${{github.workspace}}/myapp"
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        client-id: '${{ secrets.AZUREAPPSERVICE_CLIENTID_CC363CD721BE4F43B376C4DAA362F73 }}'
+        tenant-id: '${{ secrets.AZUREAPPSERVICE_TENANTID_EDB83924834A451DB73C3207875E6760 }}'
+        subscription-id: '${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_70477AC48A854C4FBC9117AAEC350E23 }}'
 
-  deploy:
-    runs-on: windows-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: .net-app
-      
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_CC363CD721BE4F43BC376C4DAA362F73 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_EDB83924B34A451DB73C3207875E6760 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_EDC3610621AE43AA94E2FEE1F51FB5B0 }}
-
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: 'crownbuilders-portal'
-          slot-name: 'Production'
-          package: .
-          
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: 'crownbuilders-portal'
+        slot-name: 'production'
+        package: '${{github.workspace}}/myapp'
