@@ -26,13 +26,9 @@ jobs:
     - name: Publish with dotnet
       run: dotnet publish CrownBuilders/CrownBuilders.csproj -c Release -f net9.0-windows10.0.19041.0 -o "${{github.workspace}}/myapp"
 
-    - name: Login to Azure
-      uses: azure/login@v2
-      with:
-        creds: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
         app-name: 'crownbuilders-portal'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
         package: '${{github.workspace}}/myapp'
