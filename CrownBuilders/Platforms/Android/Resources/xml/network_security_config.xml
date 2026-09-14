@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+	<!-- Configuración base para permitir tráfico HTTPS y certificados del sistema -->
+	<base-config cleartextTrafficPermitted="true">
+		<trust-anchors>
+			<certificates src="system" />
+		</trust-anchors>
+	</base-config>
+
+	<!-- Permitir explícitamente el dominio de Azure -->
+	<domain-config cleartextTrafficPermitted="true">
+		<domain includeSubdomains="true">azurewebsites.net</domain>
+	</domain-config>
+</network-security-config>

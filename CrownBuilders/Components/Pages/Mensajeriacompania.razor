@@ -1,0 +1,283 @@
+﻿@page "/mensajeria-compania"
+@page "/mensajeria-compania/{NombreTrabajadorRoute}"
+@page "/mensajeria-compania/{NombreTrabajadorRoute}/{TrabajadorIdRoute}"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Logging
+@implements IAsyncDisposable
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<Mensajeriacompania> Logger
+
+<div class="container-fluid d-flex flex-column" style="height: 100vh; background-color: #f8f9fa;">
+    <!-- ENCABEZADO MEJORADO: BOTONES DE VOLVER, RESEÑA COMPACTA Y REPORTAR DESTACADO -->
+    <div class="bg-white p-3 shadow-sm d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center">
+            <button class="btn btn-sm btn-link text-dark p-0 me-2" @onclick="Volver" style="text-decoration: none;">← Volver</button>
+            <h5 class="fw-bold mb-0 ms-2" style="color: #0A1128;">Chat con @nombreTrabajador</h5>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Diseño profesional y discreto para "Próximamente" -->
+            <div class="bg-light text-secondary px-2 py-1" style="font-size: 0.65rem; border: 1px solid #dee2e6; border-radius: 12px; opacity: 0.8; user-select: none;">
+                ⭐ Reseñas <span class="fst-italic">Próximamente</span>
+            </div>
+            <!-- Botón de reportar más visible -->
+            <button class="btn btn-sm btn-danger fw-bold px-3 shadow-sm" style="font-size: 0.8rem; border-radius: 12px;" @onclick="ReportarCuenta">
+                Reportar
+            </button>
+        </div>
+    </div>
+
+    <!-- ÁREA DE MENSAJES -->
+    <div class="flex-grow-1 p-3 overflow-auto">
+        @foreach (var msg in messages)
+        {
+            <div class="d-flex mb-3 @(msg.EsMio ? "justify-content-end" : "justify-content-start")">
+                <div class="p-2 px-3 shadow-sm @(msg.EsMio ? "bg-warning text-dark" : "bg-white text-dark")" style="border-radius: 15px; max-width: 80%;">
+                    <span class="fw-bold d-block mb-1" style="font-size: 0.75rem; opacity: 0.8;">
+                        @(msg.EsMio ? "Tú" : msg.Remitente)
+                    </span>
+                    <p class="mb-0 small">@msg.Texto</p>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- ENTRADA DE TEXTO -->
+    <div class="bg-white p-3 shadow-lg">
+        <div class="input-group">
+            <input type="text" class="form-control" placeholder="Escribe un mensaje..." @bind="mensajeNuevo" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <button class="btn text-white fw-bold" style="background-color: #D4AF37;" @onclick="EnviarMensaje">Enviar</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? NombreTrabajadorRoute { get; set; }
+    [Parameter] public string? TrabajadorIdRoute { get; set; }
+    
+    private HubConnection? hubConnection;
+    private List<MensajeUI> messages = new List<MensajeUI>();
+    private string? mensajeNuevo;
+    
+    private string nombreTrabajador = "Trabajador";
+    private int companiaIdActual = 1; // Ajusta esto según tu lógica de sesión real
+    private int trabajadorIdSimulado = 1;
+
+    public class MensajeUI
+    {
+        public string Remitente { get; set; } = "";
+        public string Texto { get; set; } = "";
+        public bool EsMio { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        messages.Clear();
+
+        if (!string.IsNullOrEmpty(NombreTrabajadorRoute))
+        {
+            nombreTrabajador = Uri.UnescapeDataString(NombreTrabajadorRoute);
+        }
+
+        if (!string.IsNullOrEmpty(TrabajadorIdRoute) && int.TryParse(TrabajadorIdRoute, out int trabajadorIdFromRoute))
+        {
+            trabajadorIdSimulado = trabajadorIdFromRoute;
+        }
+
+        try
+        {
+            // El orden de los IDs debe coincidir con el método (TrabajadorId, CompaniaId)
+            var historialDB = await DatabaseHelper.ObtenerHistorialAsync(trabajadorIdSimulado, companiaIdActual);
+            if (historialDB != null)
+            {
+                foreach (var msj in historialDB)
+                {
+                    bool esMio = string.Equals(msj.Remitente, "compania", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(msj.Remitente, "tú", StringComparison.OrdinalIgnoreCase);
+
+                    string remitenteNombre = esMio ? "Tú" : (string.IsNullOrWhiteSpace(msj.Remitente) ? nombreTrabajador : msj.Remitente);
+
+                    messages.Add(new MensajeUI
+                    {
+                        Remitente = remitenteNombre,
+                        Texto = msj.Texto ?? "",
+                        EsMio = esMio
+                    });
+                }
+            }
+        }
+        catch
+        {
+            messages.Add(new MensajeUI { Remitente = "Sistema", Texto = "Modo sin conexión cargado.", EsMio = false });
+        }
+
+        var httpClientHandler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+        };
+
+        // URL CORREGIDA: Incluye /api/chathub exactamente igual que en el código del trabajador
+        hubConnection = new HubConnectionBuilder()
+           .WithUrl("https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/chathub", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => httpClientHandler;
+                options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
+                options.SkipNegotiation = false;
+                options.Cookies = new System.Net.CookieContainer();
+            })
+            .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(60) })
+            .WithServerTimeout(TimeSpan.FromSeconds(30))
+            .Build();
+
+        hubConnection.Closed += async (error) =>
+        {
+            Logger?.LogWarning($"[SIGNALR COMPAÑÍA] Conexión cerrada: {error?.Message}");
+            await Task.CompletedTask.ConfigureAwait(false);
+        };
+
+        hubConnection.Reconnecting += async (error) =>
+        {
+            Logger?.LogInformation($"[SIGNALR COMPAÑÍA] Reconectando... Error: {error?.Message}");
+            await Task.CompletedTask.ConfigureAwait(false);
+        };
+
+        hubConnection.Reconnected += async (connectionId) =>
+        {
+            Logger?.LogInformation($"[SIGNALR COMPAÑÍA] Reconectado exitosamente. ConnectionId: {connectionId}");
+            // El formato del string grupoId debe ser idéntico al que usa el trabajador
+            string grupoId = $"trabajador-{trabajadorIdSimulado}-compania-{companiaIdActual}";
+            await hubConnection.SendAsync("UnirseAConversacion", grupoId).ConfigureAwait(false);
+        };
+
+        hubConnection.On<string, string>("ReceiveMessage", async (u, m) =>
+        {
+            // Ignorar los mensajes propios (los que envía la compañía) para no duplicarlos
+            if (string.Equals(u, "compania", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(u, "compañia", StringComparison.OrdinalIgnoreCase)) return;
+
+            try
+            {
+                var msjRecibido = new CrownBuilders.Models.Mensaje { TrabajadorId = trabajadorIdSimulado, CompaniaId = companiaIdActual, Remitente = u, Texto = m, FechaEnvio = DateTime.Now };
+                await DatabaseHelper.GuardarMensajeAsync(msjRecibido).ConfigureAwait(false);
+            }
+            catch { }
+
+            await InvokeAsync(() =>
+            {
+                messages.Add(new MensajeUI { Remitente = string.IsNullOrWhiteSpace(u) ? nombreTrabajador : u, Texto = m, EsMio = false });
+                StateHasChanged();
+            });
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ = Task.Run(async () => await ConectarAlServidorSilencioso());
+        }
+    }
+
+    private async Task ConectarAlServidorSilencioso()
+    {
+        try
+        {
+            if (hubConnection?.State == HubConnectionState.Disconnected)
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await hubConnection.StartAsync(cts.Token).ConfigureAwait(false);
+
+                if (hubConnection.State == HubConnectionState.Connected)
+                {
+                    string grupoId = $"trabajador-{trabajadorIdSimulado}-compania-{companiaIdActual}";
+                    await hubConnection.SendAsync("UnirseAConversacion", grupoId).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger?.LogError($"[CHAT COMPAÑÍA] Error conectando SignalR: {ex.Message}");
+        }
+    }
+    
+    private void Volver() => Navigation.NavigateTo("/trabajadores-disponibles"); // Ajusta esta ruta a donde debe regresar la compañía
+
+    private async Task ReportarCuenta()
+    {
+        string numeroWhatsApp = "16314860524";
+        string mensaje = Uri.EscapeDataString($"Hola soporte, necesito reportar un inconveniente con el trabajador {nombreTrabajador} a través de la app Crown Builders.");
+        string url = $"https://wa.me/{numeroWhatsApp}?text={mensaje}";
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+    
+    private async Task EnviarMensaje()
+    {
+        if (!string.IsNullOrWhiteSpace(mensajeNuevo))
+        {
+            var textoAEnviar = mensajeNuevo;
+            mensajeNuevo = string.Empty;
+
+            try
+            {
+                // Se guarda localmente como "compania"
+                var msjEnviado = new CrownBuilders.Models.Mensaje { TrabajadorId = trabajadorIdSimulado, CompaniaId = companiaIdActual, Remitente = "compania", Texto = textoAEnviar, FechaEnvio = DateTime.Now };
+                await DatabaseHelper.GuardarMensajeAsync(msjEnviado).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError($"[CHAT COMPAÑÍA] Error guardando mensaje localmente: {ex.Message}");
+            }
+
+            await InvokeAsync(() =>
+            {
+                messages.Add(new MensajeUI { Remitente = "Tú", Texto = textoAEnviar, EsMio = true });
+                StateHasChanged();
+            });
+
+            string grupoId = $"trabajador-{trabajadorIdSimulado}-compania-{companiaIdActual}";
+            
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    if (hubConnection?.State == HubConnectionState.Connected)
+                    {
+                        // Se envía al Hub identificándose como "compania"
+                        await hubConnection.SendAsync("EnviarMensajePrivado", grupoId, "compania", textoAEnviar).ConfigureAwait(false);
+                    }
+                    else if (hubConnection != null)
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                        await hubConnection.StartAsync(cts.Token);
+                        if (hubConnection.State == HubConnectionState.Connected)
+                        {
+                            await hubConnection.SendAsync("UnirseAConversacion", grupoId);
+                            await hubConnection.SendAsync("EnviarMensajePrivado", grupoId, "compania", textoAEnviar);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger?.LogError($"[CHAT COMPAÑÍA] Error enviando via SignalR: {ex.Message}");
+                }
+            });
+        }
+    }
+
+    private async Task HandleKeyUp(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await EnviarMensaje();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.StopAsync();
+            await hubConnection.DisposeAsync();
+        }
+    }
+}

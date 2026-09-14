@@ -1,6 +1,8 @@
 ﻿@page "/login-compania"
 @using CrownBuilders
+@using CrownBuilders.Services
 @inject NavigationManager Navigation
+@inject ApiService ApiService
 
 <style>
     :root {
@@ -17,7 +19,7 @@
 
 <div class="container mt-4 px-3">
     <div class="mb-3">
-        <button @onclick="VolverAlHome" class="btn btn-outline-dark btn-sm" style="border-radius: 8px;">
+        <button @onclick="VolverAlHome" class="btn btn-outline-dark btn-sm" style="border-radius: 8px;" disabled="@cargando">
             <i class="oi oi-arrow-left"></i> Volver
         </button>
     </div>
@@ -39,11 +41,21 @@
                 </div>
             }
 
+            @if (cargando)
+            {
+                <div class="text-center mb-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <p class="text-muted mt-2">Verificando credenciales...</p>
+                </div>
+            }
+
             <div class="mb-3">
                 <label class="form-label small fw-bold text-navy">Correo Electrónico</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light text-navy border-end-0"><i class="oi oi-envelope-closed"></i></span>
-                    <input type="email" class="form-control bg-light border-start-0" placeholder="ejemplo@compania.com" @bind="correo" />
+                    <input type="email" class="form-control bg-light border-start-0" placeholder="ejemplo@compania.com" @bind="correo" disabled="@cargando" />
                 </div>
             </div>
 
@@ -51,19 +63,33 @@
                 <label class="form-label small fw-bold text-navy">Contraseña</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light text-navy border-end-0"><i class="oi oi-lock-locked"></i></span>
-                    <input type="password" class="form-control bg-light border-start-0" placeholder="**" @bind="password" />
+                    <input type="password" class="form-control bg-light border-start-0" placeholder="**" @bind="password" disabled="@cargando" />
                 </div>
             </div>
 
-            <button @onclick="ProcesarLogin" class="btn btn-custom w-100 py-2 fw-bold shadow-sm mb-2" style="border-radius: 8px;">
-                Iniciar Sesión <i class="oi oi-account-login ms-1"></i>
+            <button @onclick="ProcesarLogin" class="btn btn-custom w-100 py-2 fw-bold shadow-sm mb-2" style="border-radius: 8px;" disabled="@cargando">
+                @if (cargando)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                    <span>Iniciando Sesión...</span>
+                }
+                else
+                {
+                    <span>Iniciar Sesión <i class="oi oi-account-login ms-1"></i></span>
+                }
             </button>
         </div>
     </div>
-
+    <div class="text-center mt-3">
+        <a href="https://wa.me/16314860524?text=Hola,%20necesito%20ayuda%20con%20mi%20cuenta%20de%20empresa%20en%20Crown%20Builders" 
+           target="_blank" 
+           style="color: #0A192F; font-size: 0.85em; text-decoration: underline;">
+            ¿Necesitas ayuda con tu acceso?
+        </a>
+    </div>
     <div class="text-center py-2">
         <p class="text-muted small mb-1">¿Tu compañía aún no tiene cuenta?</p>
-        <button @onclick="IrARegistroCompania" class="btn btn-link text-gold fw-bold small p-0 text-decoration-none">
+        <button @onclick="IrARegistroCompania" class="btn btn-link text-gold fw-bold small p-0 text-decoration-none" disabled="@cargando">
             Crear un perfil corporativo aquí
         </button>
     </div>
@@ -73,35 +99,120 @@
     private string correo = "";
     private string password = "";
     private string mensajeError = "";
+    private bool cargando = false;
 
     private void IrARegistroCompania() => Navigation.NavigateTo("/registro-compania");
     private void VolverAlHome() => Navigation.NavigateTo("/");
 
     private async Task ProcesarLogin()
     {
-        if (string.IsNullOrEmpty(correo) || string.IsNullOrEmpty(password))
+        try
         {
-            mensajeError = "Por favor, completa todos los campos.";
-            return;
+            if (string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(password))
+            {
+                mensajeError = "Por favor, completa todos los campos.";
+                return;
+            }
+
+            string correoLimpio = correo.Trim().ToLower();
+            mensajeError = "";
+            cargando = true;
+
+            System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Intentando entrar con -> Correo: '{correoLimpio}', Pass: '{password}'");
+
+            // Ejecución asíncrona segura envuelta con Task.Run y control de cancelación para prevenir bloqueos de sockets en Azure
+            var authResponse = await Task.Run(async () =>
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                return await ApiService.LoginCompaniaAsync(correoLimpio, password);
+            });
+            
+            if (authResponse != null && authResponse.Exitoso)
+            {
+                System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Autenticación exitosa con Azure. ID: {authResponse.Id}");
+                
+                // Establecer el token de autenticación para peticiones posteriores
+                if (!string.IsNullOrEmpty(authResponse.Token))
+                {
+                    ApiService.SetAuthToken(authResponse.Token);
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Token de autenticación establecido");
+                }
+                
+                // Sincronizar datos localmente para offline en segundo plano protegido
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var companiaDesdeAzure = await ApiService.ObtenerCompaniaAsync(authResponse.Id);
+                        if (companiaDesdeAzure != null)
+                        {
+                            var companiaLocal = new PerfilCompania
+                            {
+                                Id = companiaDesdeAzure.Id,
+                                NombreEmpresa = companiaDesdeAzure.NombreEmpresa,
+                                Especialidad = companiaDesdeAzure.Especialidad,
+                                Ciudad = companiaDesdeAzure.Ciudad,
+                                Correo = companiaDesdeAzure.Correo,
+                                Telefono = companiaDesdeAzure.Telefono,
+                                Password = companiaDesdeAzure.Password,
+                                FormaPago = companiaDesdeAzure.FormaPago,
+                                MontoPago = companiaDesdeAzure.MontoPago.ToString() ?? "0",
+                                NombreTitular = companiaDesdeAzure.NombreTitular,
+                                NumeroTarjeta = companiaDesdeAzure.NumeroTarjeta,
+                                FechaExpiracion = companiaDesdeAzure.FechaExpiracion,
+                                CVC = companiaDesdeAzure.CVC,
+                                AceptaTerminos = companiaDesdeAzure.AceptaTerminos
+                            };
+                            await DatabaseHelper.GuardarPerfilCompaniaAsync(companiaLocal);
+                            System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Datos sincronizados localmente");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Error sincronizando datos localmente: {ex.Message}");
+                    }
+                });
+
+                // Captura y envío blindado del token de notificaciones (FCM)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        string fcmToken = await PushNotificationHandler.GetDeviceFcmTokenAsync();
+                        if (!string.IsNullOrEmpty(fcmToken))
+                        {
+                            await PushNotificationHandler.SendFcmTokenAsync(authResponse.Id, fcmToken, "compania");
+                            System.Diagnostics.Debug.WriteLine($"[FCM] Token registrado correctamente para la compañía ID: {authResponse.Id}");
+                        }
+                    }
+                    catch (Exception exFcm)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[FCM] Error capturando token de notificación: {exFcm.Message}");
+                    }
+                });
+
+                mensajeError = "";
+                
+                // Iniciar precarga en segundo plano de datos
+                BackgroundCacheService.StartBackgroundPreload();
+                
+                Navigation.NavigateTo("/portal-compania");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Autenticación fallida: {authResponse?.Mensaje}");
+                mensajeError = authResponse?.Mensaje ?? "El correo o la contraseña son incorrectos, o la cuenta no existe.";
+            }
         }
-        
-        mensajeError = "";
-
-        // 1. Obtenemos el perfil guardado en la base de datos local
-        var perfilGuardado = await DatabaseHelper.ObtenerPerfilCompaniaAsync();
-
-        // 2. Validamos si existe un perfil y si las credenciales coinciden exactamente
-        if (perfilGuardado != null && 
-            perfilGuardado.Correo == correo && 
-            perfilGuardado.Password == password)
+        catch (Exception ex)
         {
-            // Las credenciales son correctas y el perfil existe
-            Navigation.NavigateTo("/portal-compania");
+            System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Error: {ex.Message}");
+            mensajeError = "Error de conexión: " + ex.Message;
         }
-        else 
-        { 
-            // El correo/contraseña no coincide o no hay cuenta registrada
-            mensajeError = "El correo o la contraseña son incorrectos, o la cuenta no existe."; 
+        finally
+        {
+            cargando = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 }

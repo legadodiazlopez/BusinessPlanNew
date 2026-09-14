@@ -1,5 +1,6 @@
 ﻿@page "/portal-compania"
 @using CrownBuilders
+@using System.Net.Http.Json
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -19,81 +20,85 @@
         <div class="mb-3">
             <div class="input-group input-group-sm shadow-sm" style="border-radius: 12px; overflow: hidden;">
                 <span class="input-group-text bg-white border-end-0 text-muted">🔍</span>
-                <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar por puesto o especialidad...">
+                <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar por puesto o especialidad..." @bind="textoBusqueda" @bind:event="oninput">
             </div>
         </div>
 
-        <div class="lista-trabajadores" style="padding-bottom: 20px;">
-            @* Aquí comienza el bucle de trabajadores *@
-            @foreach (var trabajador in listaTrabajadores)
-            {
-                <div class="card border-0 shadow-sm mb-3 p-3" style="border-radius: 16px; background: #ffffff;">
-                    <div class="d-flex align-items-center mb-2">
-                        <div class="flex-grow-1">
-                            <h6 class="fw-bold text-dark mb-0">@trabajador.Nombre</h6>
-                            <span class="badge small" style="background-color: #0A1128; color: #ffffff;">@trabajador.Especialidad</span>
-                            
-                            <span class="badge ms-2 @(trabajador.EstaDisponible ? "bg-success" : "bg-secondary")">
-                                @(trabajador.EstaDisponible ? "Disponible" : "Ocupado")
-                            </span>
-                        </div>
-                        <div class="text-end">
-                            <span class="fw-bold text-success small">$@trabajador.Tarifa / hr</span>
-                        </div>
-                    </div>
-
-                    <p class="small text-muted mb-2"><strong>Experiencia:</strong> @trabajador.DescripcionExperiencia</p>
-            
-                    <div class="d-flex gap-2 mb-3">
-                        @if (trabajador.TieneVehiculo)
-                        {
-                            <span class="badge bg-light text-dark border">🚗 Con Carro</span>
-                        }
-                        @if (trabajador.TieneHerramientas)
-                        {
-                            <span class="badge bg-light text-dark border">🛠️ Con Herramientas</span>
-                        }
-                    </div>
-
-                    <div class="d-flex align-items-center justify-content-between mb-1">
-                        <span class="small fw-bold">Experiencia</span>
-                        <div class="text-warning">
-                            @for (int i = 0; i < 5; i++)
-                            {
-                                <span>★</span>
-                            }
-                        </div>
-                    </div>
-
-                    <div class="d-flex align-items-center justify-content-between mb-1">
-                        <span class="small fw-bold">Puntualidad</span>
-                        <div class="text-warning">
-                            @for (int i = 0; i < 4; i++)
-                            {
-                                <span>★</span>
-                            }
-                            <span>☆</span>
-                        </div>
-                    </div>
-
-                    <div class="d-flex align-items-center justify-content-between mb-1">
-                        <span class="small fw-bold">Actitud</span>
-                        <div class="text-warning">
-                            @for (int i = 0; i < 5; i++)
-                            {
-                                <span>★</span>
-                            }
-                        </div>
-                    </div>
-
-                    <button class="btn btn-sm w-100 fw-bold text-white shadow-sm mt-3"
-                            style="background-color: #0A1128; border-radius: 8px; padding: 10px;"
-                            @onclick="IrAMensajeria">
-                        Contratar / Mensajear
-                    </button>
+        @if (estaCargando)
+        {
+            <div class="text-center my-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
                 </div>
-            }
-        </div>
+                <p class="mt-2 text-muted small">Sincronizando directorio de trabajadores...</p>
+            </div>
+        }
+        else
+        {
+            <div class="lista-trabajadores" style="padding-bottom: 20px;">
+                @foreach (var trabajador in TrabajadoresFiltrados)
+                {
+                    <div class="card border-0 shadow-sm mb-3 p-3" style="border-radius: 16px; background: #ffffff;">
+                        <div class="d-flex align-items-center mb-3">
+                            
+                            <!-- Foto de Perfil -->
+                            @if (!string.IsNullOrEmpty(trabajador.FotoPerfil))
+                            {
+                                <img src="@trabajador.FotoPerfil" alt="Foto de @trabajador.Nombre" class="rounded-circle me-3" style="width: 55px; height: 55px; object-fit: cover; border: 2px solid #0A1128;" />
+                            }
+                            else
+                            {
+                                <div class="rounded-circle me-3 d-flex justify-content-center align-items-center text-white fw-bold" style="width: 55px; height: 55px; background-color: #0A1128;">
+                                    @(string.IsNullOrWhiteSpace(trabajador.Nombre) ? "?" : trabajador.Nombre.Substring(0, 1).ToUpper())
+                                </div>
+                            }
+
+                            <!-- Información Principal -->
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold text-dark mb-0">@trabajador.Nombre</h6>
+                                <div class="d-flex flex-wrap align-items-center mt-1 gap-2">
+                                    <span class="badge small" style="background-color: #0A1128; color: #ffffff;">@trabajador.Oficio</span>
+                                    @if (!string.IsNullOrEmpty(trabajador.Ciudad))
+                                    {
+                                        <span class="small text-muted fw-semibold">📍 @trabajador.Ciudad</span>
+                                    }
+                                </div>
+                                
+                                <div class="mt-1">
+                                    <span class="badge @(trabajador.EstaDisponible ? "bg-success" : "bg-secondary")">
+                                        @(trabajador.EstaDisponible ? "Disponible" : "Ocupado")
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Tarifa -->
+                            <div class="text-end align-self-start">
+                                <span class="fw-bold text-success" style="font-size: 1.1rem;">$@trabajador.Salario <span class="small text-muted fw-normal">/ hr</span></span>
+                            </div>
+                        </div>
+
+                        <p class="small text-muted mb-2"><strong>Experiencia:</strong> @trabajador.DescripcionExperiencia</p>
+                
+                        <div class="d-flex gap-2 mb-3">
+                            @if (trabajador.TieneVehiculo)
+                            {
+                                <span class="badge bg-light text-dark border">🚗 Con Carro</span>
+                            }
+                            @if (trabajador.TieneHerramientas)
+                            {
+                                <span class="badge bg-light text-dark border">🛠️ Con Herramientas</span>
+                            }
+                        </div>
+
+                        <button class="btn btn-sm w-100 fw-bold text-white shadow-sm mt-3"
+                                style="background-color: #0A1128; border-radius: 8px; padding: 10px;"
+                                @onclick="() => IrAMensajeria(trabajador)">
+                            Contratar / Mensajear
+                        </button>
+                    </div>
+                }
+            </div>
+        }
     }
     else
     {
@@ -130,34 +135,141 @@
 @code {
     private PerfilCompania perfil = new PerfilCompania();
     private bool mostrarConfiguracion = false;
+    private string textoBusqueda = "";
+    private bool estaCargando = true;
     
-    // Lista de trabajadores que alimentará la UI
-    private List<TrabajadorViewModel> listaTrabajadores = new List<TrabajadorViewModel> {
-        new TrabajadorViewModel { Nombre = "Carlos Mendoza", Especialidad = "Carpintero", Tarifa = 25, DescripcionExperiencia = "5 años en carpintería.", EstaDisponible = false, TieneVehiculo = true, TieneHerramientas = true }
+    private List<TrabajadorViewModel> listaTrabajadores = new List<TrabajadorViewModel>();
+
+    // Instancia estática de HttpClient con bypass de certificados SSL para evitar saturación de sockets y caídas con Azure
+    private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+    })
+    {
+        BaseAddress = new Uri("https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/"),
+        Timeout = TimeSpan.FromSeconds(15)
     };
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
-        var datos = await DatabaseHelper.ObtenerPerfilCompaniaAsync();
-        if (datos != null) perfil = datos;
+        _ = CargarDatosPortalAsync();
     }
 
-    // Modelo sencillo para el ejemplo
+    private async Task CargarDatosPortalAsync()
+    {
+        try
+        {
+            var perfilTask = Task.Run(() => DatabaseHelper.ObtenerPerfilCompaniaAsync());
+            var trabajadoresTask = Task.Run(() => DatabaseHelper.ObtenerTrabajadoresAsync());
+
+            await Task.WhenAll(perfilTask, trabajadoresTask);
+
+            var datosPerfil = await perfilTask;
+            if (datosPerfil != null) perfil = datosPerfil;
+
+            var trabajadoresDb = await trabajadoresTask;
+            if (trabajadoresDb != null && trabajadoresDb.Count > 0)
+            {
+                listaTrabajadores = trabajadoresDb.Select(t => new TrabajadorViewModel
+                {
+                    Id = t.Id,
+                    FotoPerfil = t.FotoPerfil,
+                    Nombre = t.Nombre,
+                    Oficio = t.Oficio,
+                    Ciudad = t.Ciudad,
+                    Salario = t.Salario,
+                    DescripcionExperiencia = $"{t.Experiencia} años de experiencia",
+                    EstaDisponible = true,
+                    TieneVehiculo = t.TieneVehiculo,
+                    TieneHerramientas = t.TieneHerramientas
+                }).ToList();
+            }
+            else
+            {
+                listaTrabajadores = new List<TrabajadorViewModel> {
+                    new TrabajadorViewModel { Id = 1, Nombre = "Carlos Mendoza", Oficio = "Carpintero", Salario = 25, DescripcionExperiencia = "5 años en carpintería.", EstaDisponible = false, TieneVehiculo = true, TieneHerramientas = true }
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[PORTAL COMPAÑÍA] Error de carga: {ex.Message}");
+        }
+        finally
+        {
+            estaCargando = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
+        // Carga de calificaciones secundarias en segundo plano para evitar bloqueos visuales
+        _ = Task.Run(CargarCalificacionesEnSegundoPlano);
+    }
+
+    private async Task CargarCalificacionesEnSegundoPlano()
+    {
+        if (listaTrabajadores.Count == 0) return;
+
+        try
+        {
+            var calificacionesTasks = listaTrabajadores.Select(async trabajador =>
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    var response = await _httpClient.GetAsync($"resenas/promedio/{trabajador.Id}/Trabajador", cts.Token);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var promedio = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+                        if (promedio.ValueKind != System.Text.Json.JsonValueKind.Undefined)
+                        {
+                            if (promedio.TryGetProperty("promedioCalificacion2", out var p2)) trabajador.CalificacionExperiencia = (int)Math.Round(p2.GetDouble());
+                            if (promedio.TryGetProperty("promedioCalificacion1", out var p1)) trabajador.CalificacionPuntualidad = (int)Math.Round(p1.GetDouble());
+                            if (promedio.TryGetProperty("promedioCalificacion3", out var p3)) trabajador.CalificacionActitud = (int)Math.Round(p3.GetDouble());
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignora fallos individuales silenciosamente para no interrumpir
+                }
+            });
+
+            await Task.WhenAll(calificacionesTasks);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CALIFICACIONES] Error segundo plano: {ex.Message}");
+        }
+    }
+
+    private IEnumerable<TrabajadorViewModel> TrabajadoresFiltrados => listaTrabajadores
+        .Where(t => string.IsNullOrEmpty(textoBusqueda) ||
+                    (!string.IsNullOrEmpty(t.Nombre) && t.Nombre.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(t.Oficio) && t.Oficio.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase)));
+
     public class TrabajadorViewModel
     {
-        public string Nombre { get; set; }
-        public string Especialidad { get; set; }
-        public double Tarifa { get; set; }
-        public string DescripcionExperiencia { get; set; }
+        public int Id { get; set; }
+        public string FotoPerfil { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string Oficio { get; set; } = string.Empty;
+        public string Ciudad { get; set; } = string.Empty;
+        public int Salario { get; set; }
+        public string DescripcionExperiencia { get; set; } = string.Empty;
         public bool EstaDisponible { get; set; }
         public bool TieneVehiculo { get; set; }
         public bool TieneHerramientas { get; set; }
+        public int CalificacionExperiencia { get; set; } = 5;
+        public int CalificacionPuntualidad { get; set; } = 5;
+        public int CalificacionActitud { get; set; } = 5;
     }
 
     private void AlternarVista() => mostrarConfiguracion = !mostrarConfiguracion;
     private void IrAEditarPerfil() => Navigation.NavigateTo("/editar-perfil-compania");
     private void IrAReportarAusencia() => Navigation.NavigateTo("/boton-garantia");
-    private void IrAMensajeria() => Navigation.NavigateTo("/mensajeria-trabajador");
+    
+    private void IrAMensajeria(TrabajadorViewModel trabajador) => Navigation.NavigateTo($"/mensajeria-compania/{Uri.EscapeDataString(trabajador.Nombre)}/{trabajador.Id}");
     
     private async Task EliminarCuentaPermanentemente()
     {
@@ -170,9 +282,5 @@
         }
     }
 
-    private void CerrarSesion()
-    {
-        // Aquí puedes agregar lógica adicional de limpieza de tokens/sesión local si es necesario.
-        Navigation.NavigateTo("/");
-    }
+    private void CerrarSesion() => Navigation.NavigateTo("/");
 }

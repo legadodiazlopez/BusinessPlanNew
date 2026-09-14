@@ -1,5 +1,6 @@
 <Solution>
+  <Project Path="CrownBuilders.API/CrownBuilders.API.csproj" Id="fbe40de7-58af-4920-93f1-bd346160cde7" />
   <Project Path="CrownBuilders/CrownBuilders.csproj">
-    <Deploy Solution="Debug|*" />
+    <Deploy />
   </Project>
 </Solution>

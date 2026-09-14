@@ -1,12 +1,23 @@
 @page "/login-trabajador"
+@using CrownBuilders.Services
+@using CrownBuilders // Aseguramos el namespace del modelo Trabajador
 @inject NavigationManager Navigation
+@inject ApiService ApiService
+
+<style>
+    :root { --navy: #0A192F; --gold: #C5A059; }
+    .text-navy { color: var(--navy); }
+    .bg-navy { background-color: var(--navy); color: white; }
+    .text-gold { color: var(--gold); }
+    .border-gold { border-color: var(--gold); }
+</style>
 
 <div class="container mt-5">
     <div class="row justify-content-center">
         <div class="col-md-6 col-lg-4">
             <div class="card p-4 shadow-sm" style="border-radius: 15px;">
                 <div class="text-center mb-4">
-                    <h3 style="color: #1a2b4e;">Acceso Trabajador</h3>
+                    <h3 class="fw-bold text-navy">Acceso Trabajador</h3>
                     <p class="text-muted">Ingresa a tu perfil profesional</p>
                 </div>
 
@@ -17,24 +28,52 @@
                     </div>
                 }
 
+                @if (cargando)
+                {
+                    <div class="text-center mb-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando...</span>
+                        </div>
+                        <p class="text-muted mt-2">Verificando credenciales...</p>
+                    </div>
+                }
+
                 <div class="mb-3">
-                    <label class="form-label">Correo electrónico</label>
-                    <input type="email" class="form-control" @bind="email" placeholder="nombre@ejemplo.com" />
+                    <label class="form-label text-navy fw-bold">Correo electrónico</label>
+                    <input type="email" class="form-control" @bind="email" placeholder="nombre@ejemplo.com" disabled="@cargando" />
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Contraseña</label>
-                    <input type="password" class="form-control" @bind="password" placeholder="**" />
+                    <label class="form-label text-navy fw-bold">Contraseña</label>
+                    <input type="password" class="form-control" @bind="password" placeholder="**" disabled="@cargando" />
                 </div>
 
-                <button class="btn w-100 mt-3" style="background-color: #1a2b4e; color: white;" @onclick="HandleLogin">
-                    Ingresar
+                <button class="btn bg-navy w-100 mt-3" @onclick="HandleLogin" disabled="@cargando">
+                    @if (cargando)
+                    {
+                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                        <span class="ms-2">Ingresando...</span>
+                    }
+                    else
+                    {
+                        <span>Ingresar</span>
+                    }
                 </button>
+
+                <!-- Bloque de soporte consistente -->
+                <div class="text-center mt-3">
+                    <a href="https://wa.me/16314860524?text=Hola,%20necesito%20ayuda%20con%20mi%20cuenta%20de%20trabajador%20en%20Crown%20Builders"
+                       target="_blank"
+                       class="text-navy"
+                       style="font-size: 0.85em; text-decoration: underline;">
+                        ¿Necesitas ayuda con tu acceso?
+                    </a>
+                </div>
 
                 <div class="text-center mt-4 p-2" style="border-top: 1px solid #dee2e6;">
                     <span class="text-muted">¿No tienes cuenta?</span>
-                    <a href="registro-trabajador" class="fw-bold" style="color: #C5A059; text-decoration: underline; display: block; margin-top: 5px;">
-                        NO TIENES CUENTA?/ REGÍSTRATE AQUÍ
+                    <a href="registro-trabajador" class="fw-bold text-gold" style="text-decoration: underline; display: block; margin-top: 5px;">
+                        NO TIENES CUENTA? / REGÍSTRATE AQUÍ
                     </a>
                 </div>
             </div>
@@ -43,40 +82,111 @@
 </div>
 
 @code {
-    private string email;
-    private string password;
-    private string mensajeError;
+    private string email = "";
+    private string password = "";
+    private string mensajeError = "";
+    private bool cargando = false;
 
     private async Task HandleLogin()
     {
         try
         {
-            // Validar campos vacíos
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             {
                 mensajeError = "Por favor, ingresa tu correo y contraseña.";
                 return;
             }
 
-            // Llamamos a tu base de datos SQLite usando el validador específico de trabajadores
-            var trabajadorValidado = await CrownBuilders.DatabaseHelper.ValidarCredencialesTrabajadorAsync(email, password);
+            string emailLimpio = email.Trim().ToLower();
+            mensajeError = "";
+            cargando = true;
 
-            if (trabajadorValidado != null)
+            System.Diagnostics.Debug.WriteLine($"[LOGIN] Intentando entrar con -> Correo: '{emailLimpio}'");
+
+            // 1. Intentar autenticación con Azure
+            var authResponse = await ApiService.LoginTrabajadorAsync(emailLimpio, password);
+            
+            if (authResponse != null && authResponse.Exitoso)
             {
-                // Si encuentra un registro, las credenciales son correctas
+                System.Diagnostics.Debug.WriteLine($"[LOGIN] Autenticación exitosa con Azure. ID: {authResponse.Id}");
+                
+                if (!string.IsNullOrEmpty(authResponse.Token))
+                {
+                    ApiService.SetAuthToken(authResponse.Token);
+                }
+
+                // 2. Ejecución Paralela: Sincronización Local + Token FCM
+                // En lugar de esperar a que termine uno para empezar el otro, los lanzamos al mismo tiempo.
+                var syncLocalTask = Task.Run(async () => 
+                {
+                    try
+                    {
+                        var trabajadorDesdeAzure = await ApiService.ObtenerTrabajadorAsync(authResponse.Id);
+                        if (trabajadorDesdeAzure != null)
+                        {
+                            var trabajadorLocal = new CrownBuilders.Trabajador
+                            {
+                                Id = trabajadorDesdeAzure.Id,
+                                Nombre = trabajadorDesdeAzure.Nombre,
+                                Oficio = trabajadorDesdeAzure.Oficio,
+                                Ciudad = trabajadorDesdeAzure.Ciudad,
+                                Experiencia = trabajadorDesdeAzure.Experiencia,
+                                Correo = trabajadorDesdeAzure.Correo,
+                                Telefono = trabajadorDesdeAzure.Telefono,
+                                Password = trabajadorDesdeAzure.Password,
+                                TieneVehiculo = trabajadorDesdeAzure.TieneVehiculo,
+                                TieneHerramientas = trabajadorDesdeAzure.TieneHerramientas,
+                                EstaDisponible = trabajadorDesdeAzure.EstaDisponible
+                            };
+                            await DatabaseHelper.GuardarTrabajadorAsync(trabajadorLocal);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[LOGIN] Error sync local: {ex.Message}");
+                    }
+                });
+
+                var fcmTask = Task.Run(async () => 
+                {
+                    try
+                    {
+                        string fcmToken = await PushNotificationHandler.GetDeviceFcmTokenAsync();
+                        if (!string.IsNullOrEmpty(fcmToken))
+                        {
+                            await PushNotificationHandler.SendFcmTokenAsync(authResponse.Id, fcmToken, "trabajador");
+                        }
+                    }
+                    catch (Exception exFcm)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[FCM] Error capturando token: {exFcm.Message}");
+                    }
+                });
+
+                // Esperamos a que ambas tareas terminen antes de redirigir
+                await Task.WhenAll(syncLocalTask, fcmTask);
+
                 mensajeError = "";
+                
+                // 3. Iniciar precarga en segundo plano de datos (Fire-and-forget)
+                BackgroundCacheService.StartBackgroundPreload();
+                
                 Navigation.NavigateTo("/companias-disponibles");
             }
             else
             {
-                // Si devuelve null, el usuario o contraseña no coinciden
-                mensajeError = "Usuario o contraseña incorrectos.";
+                System.Diagnostics.Debug.WriteLine($"[LOGIN] Autenticación fallida: {authResponse?.Mensaje}");
+                mensajeError = authResponse?.Mensaje ?? "El correo o la contraseña son incorrectos.";
             }
         }
         catch (Exception ex)
         {
-            mensajeError = "Error al conectar con la base de datos.";
-            Console.WriteLine(ex.Message); // Esto evita que la app se bloquee
+            System.Diagnostics.Debug.WriteLine($"[LOGIN] Error: {ex.Message}");
+            mensajeError = "Error de conexión: No se pudo conectar al servidor.";
+        }
+        finally
+        {
+            cargando = false;
         }
     }
 }

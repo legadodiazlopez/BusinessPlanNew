@@ -1,6 +1,11 @@
 @page "/registro-trabajador"
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject ApiService ApiService
+@using System.Net.Http.Json
+@using CrownBuilders.Models
+@using CrownBuilders.Services
+@using System.Text.RegularExpressions
 
 <style>
     :root {
@@ -17,9 +22,22 @@
         border: 2px solid var(--gold); 
         border-radius: 15px; 
     }
+    .btn-relumbrante {
+        color: #007bff;
+        font-weight: bold;
+        text-shadow: 0 0 8px rgba(0, 123, 255, 0.6);
+        border: none;
+        background: none;
+        text-decoration: underline;
+        padding: 0;
+        margin-left: 5px;
+    }
+    .btn-relumbrante:hover {
+        color: #0056b3;
+    }
 </style>
 
-<div class="container mt-4">
+<div class="container mt-4 mb-5">
     <div class="card p-4 shadow-sm card-custom">
         <h4 class="text-center text-navy fw-bold mb-4">Registro de Trabajador</h4>
 
@@ -27,84 +45,141 @@
             <div class="alert alert-danger p-2 small">@mensajeError</div>
         }
 
+        @if (cargando)
+        {
+            <div class="text-center mb-3">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="text-muted mt-2">Procesando registro...</p>
+            </div>
+        }
+
         <div class="text-center mb-3">
             <label for="fileInput" style="cursor: pointer;">
-                <div style="width: 100px; height: 100px; background-color: #f8f9fa; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--gold);">
-                    <span class="text-muted small">Subir Foto</span>
-                </div>
-            </label>
-            <InputFile id="fileInput" OnChange="CargarFoto" style="display: none;" />
-        </div>
-
-        <div class="mb-2"><label>Nombre Completo</label><input class="form-control" @bind="nombre" /></div>
-        <div class="mb-2"><label>Oficio / Especialidad</label><input class="form-control" @bind="oficio" /></div>
-        
-        <div class="mb-2"><label>Años de Experiencia</label><input type="number" class="form-control" @bind="experiencia" placeholder="0" min="0" /></div>
-        
-        <div class="mb-2"><label>Ciudad (Town)</label><input class="form-control" @bind="ciudad" placeholder="Ej. Shirley, Bohemia, Islip..." /></div>
-        
-        <div class="mb-2"><label>Teléfono</label><input type="number" class="form-control" @bind="telefono" placeholder="Ej. 1234567890" /></div>
-        
-        <div class="mb-2"><label>Correo</label><input class="form-control" @bind="correo" placeholder="nombre@ejemplo.com" /></div>
-        <div class="mb-2"><label>Contraseña</label><input class="form-control" type="password" @bind="password" /></div>
-        
-        <div class="mt-3">
-            <div class="form-check"><input class="form-check-input" type="checkbox" id="c1" @bind="tieneVehiculo"><label class="form-check-label" for="c1">Tiene vehículo propio</label></div>
-            <div class="form-check"><input class="form-check-input" type="checkbox" id="c2" @bind="tieneHerramientas"><label class="form-check-label" for="c2">Tiene herramientas propias</label></div>
-        </div>
-
-        <div class="mt-3 mb-4">
-            <label>Salario esperado ($)</label>
-            <div class="input-group">
-                <input type="number" class="form-control" @bind="salario" placeholder="Monto" min="0" />
-                <select class="form-select"><option>Por hora</option><option>Por jornada</option></select>
-            </div>
-        </div>
-
-        <div class="mt-4">
-            <div class="mb-3">
-                <input type="checkbox" id="verTerminos" class="form-check-input" @onclick="MostrarPrivacidad" />
-                <label class="form-check-label" for="verTerminos" style="cursor:pointer; text-decoration:underline; color:var(--navy);">Ver términos y políticas de privacidad</label>
-            </div>
-            <div class="mb-3">
-                <input type="checkbox" id="aceptarTerminos" class="form-check-input" @bind="aceptaTerminos" />
-                <label class="form-check-label" for="aceptarTerminos">Acepto los términos y condiciones</label>
-            </div>
-        </div>
-
-        <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary w-50" @onclick="Volver">Volver</button>
-            <button class="btn btn-gold w-50 fw-bold" @onclick="IniciarRegistro">Guardar Perfil</button>       
-        </div>
-    </div>
-</div>
-
-@if (mostrandoVerificacion) { 
-    <div class="modal" tabindex="-1" style="display:block; background-color:rgba(0,0,0,0.5);">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Verificación de Código</h5>
-                </div>
-                <div class="modal-body">
-                    <p>Ingresa el código de verificación (Simulación: usa 1234)</p>
-                    <input class="form-control" @bind="codigoIngresado" placeholder="Código" />
-                    @if (!string.IsNullOrEmpty(mensajeError)) {
-                        <div class="alert alert-danger mt-2 p-1 small">@mensajeError</div>
+                <div style="width: 110px; height: 110px; background-color: #f8f9fa; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--gold); overflow: hidden; position: relative;">
+                    @if (!string.IsNullOrEmpty(fotoPerfilBase64))
+                    {
+                        <img src="@fotoPerfilBase64" alt="Previsualización" style="width: 100%; height: 100%; object-fit: cover;" />
+                    }
+                    else
+                    {
+                        <div class="text-center text-muted">
+                            <i class="oi oi-camera fs-4 d-block mb-1"></i>
+                            <span class="small" style="font-size: 0.75rem;">Subir Foto</span>
+                        </div>
                     }
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" @onclick="VerificarCodigo">Validar</button>
+            </label>
+            <InputFile id="fileInput" OnChange="CargarFoto" accept="image/*" style="display: none;" disabled="@cargando" />
+        </div>
+
+        <div class="mb-2"><label>Nombre Completo</label><input class="form-control" @bind="nombre" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Oficio</label><input class="form-control" @bind="oficio" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Ciudad</label><input class="form-control" @bind="ciudad" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Teléfono</label><input class="form-control" @bind="telefono" type="number" placeholder="Solo números" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Correo Electrónico</label><input class="form-control" @bind="correo" type="email" placeholder="correo@dominio.com" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Contraseña</label><input class="form-control" @bind="password" type="password" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Experiencia (años)</label><input class="form-control" @bind="experiencia" type="number" disabled="@cargando" /></div>
+        <div class="mb-2"><label>Salario Esperado ($)</label><input class="form-control" @bind="salario" type="number" disabled="@cargando" /></div>
+        
+        <div class="mb-2 mt-2">
+            <input type="checkbox" @bind="tieneVehiculo" disabled="@cargando" id="chkVehiculo" /> <label for="chkVehiculo">Tiene Vehículo</label>
+        </div>
+        <div class="mb-2">
+            <input type="checkbox" @bind="tieneHerramientas" disabled="@cargando" id="chkHerramientas" /> <label for="chkHerramientas">Tiene Herramientas</label>
+        </div>
+        
+        <div class="form-check mb-3 d-flex align-items-center ps-0">
+            <input type="checkbox" class="form-check-input me-2" @bind="aceptaTerminos" disabled="@cargando" id="chkTerminosTrabajador" />
+            <button type="button" class="btn-relumbrante" @onclick="MostrarTerminos" disabled="@cargando">
+                Acepto los Términos y Políticas de Privacidad
+            </button>
+        </div>
+
+        <button class="btn btn-gold w-100" @onclick="IniciarRegistro" disabled="@cargando">
+            @if (cargando)
+            {
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Registrando...</span>
+            }
+            else
+            {
+                <span>Registrarse</span>
+            }
+        </button>
+    </div>
+
+    <!-- Modal de verificación -->
+    @if (mostrandoVerificacion)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content p-3" style="border-radius: 15px;">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title fw-bold">Verificación por SMS</h5>
+                        <button type="button" class="btn-close" @onclick="() => mostrandoVerificacion = false"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="small text-muted">Ingresa el código de 6 dígitos enviado a tu teléfono (por defecto usa 123456 en pruebas):</p>
+                        <input class="form-control text-center fs-4" @bind="codigoIngresado" placeholder="123456" maxlength="6" disabled="@cargando" />
+                        @if (!string.IsNullOrEmpty(mensajeError)) {
+                            <div class="alert alert-danger mt-2 p-1 small">@mensajeError</div>
+                        }
+                    </div>
+                    <div class="modal-footer border-0">
+                        @if (cargando)
+                        {
+                            <button type="button" class="btn btn-gold w-100" disabled>
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Validando...
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-gold w-100" @onclick="VerificarCodigo">
+                                Validar Código
+                            </button>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-}
+    }
+
+    <!-- Modal de Términos y Condiciones -->
+    @if (mostrandoTerminos)
+    {
+        <div class="modal-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000;">
+            <div class="card p-4 shadow" style="width: 90%; max-height: 85vh; overflow-y: auto; border-radius: 15px;">
+                <h5 class="fw-bold text-center mb-3">Políticas de Privacidad y Términos</h5>
+                <div style="font-size: 0.85em; line-height: 1.5; color: #333;">
+                    <h6 class="fw-bold mt-3">TÉRMINOS DE USO Y PRIVACIDAD DE CROWN BUILDERS</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><b>1. PRIVACIDAD:</b> Tus datos son sagrados. Nunca serán vendidos, compartidos ni comercializados.</li>
+                    <li class="mb-2"><b>2. SEGURIDAD:</b> Toda tu actividad está protegida con cifrado de nivel bancario.</li>
+                    <li class="mb-2"><b>3. CONEXIÓN:</b> Crown Builders es una herramienta tecnológica para conectar personas. No somos parte de los acuerdos, contratos o pagos realizados entre usuarios.</li>
+                    <li class="mb-2"><b>4. RESPONSABILIDAD:</b> Trabajamos constantemente para validar perfiles y asegurar una comunidad de confianza.</li>
+                    <li class="mb-2"><b>5. EDAD:</b> Al registrarte, confirmas ser mayor de 18 años.</li>
+                    <li class="mb-2"><b>6. TRANSPARENCIA:</b> Sin letras pequeñas.</li>
+                    <li class="mb-2"><b>7. PAGOS Y CANCELACIONES:</b> Tu facturación es mensual basada en tu fecha de registro. No realizamos reembolsos.</li>
+                    <li class="mb-2"><b> CROWN BUILDERS DEVOLVIENDO LA CORONA A LA CLASE QUE LA MERECE</b></li>
+                </ul>
+                </div>
+                <button class="btn btn-gold w-100 mt-3" @onclick="() => mostrandoTerminos = false">Cerrar</button>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
     private bool mostrandoVerificacion = false;
-    private string codigoIngresado, mensajeError;
-    private string nombre, oficio, ciudad, correo, password;
+    private bool mostrandoTerminos = false;
+    private bool cargando = false;
+    private string codigoIngresado = "123456";
+    private string codigoGenerado = "123456";
+    private string mensajeError = string.Empty;
+    private string nombre, oficio, ciudad, correo, password, fotoPerfilBase64;
     private int? experiencia;
     private long? telefono;
     private decimal? salario;
@@ -112,7 +187,8 @@
 
     private async Task IniciarRegistro() 
     {
-        // 1. Validar campos vacíos obligatorios (se incluye ciudad)
+        mensajeError = string.Empty;
+
         if (string.IsNullOrWhiteSpace(nombre) || !telefono.HasValue || 
             string.IsNullOrWhiteSpace(correo) || string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(ciudad))
         {
@@ -120,84 +196,177 @@
             return;
         }
 
-        // 2. Validar formato de correo electrónico
         if (!EsCorreoValido(correo))
         {
             mensajeError = "El formato del correo electrónico no es válido.";
             return;
         }
 
-        // 3. Validar aceptación de términos
         if (!aceptaTerminos)
         {
             mensajeError = "Debes aceptar los términos y condiciones para continuar.";
             return;
         }
 
-        mensajeError = "";
+        cargando = true;
+        StateHasChanged();
 
-        // 4. Guardar en Base de Datos Local (SQLite)
         try
         {
-            var nuevoTrabajador = new CrownBuilders.Trabajador
-            {
-                Nombre = nombre,
-                Ciudad = ciudad,       // <- Se guarda la ciudad ingresada
-                Correo = correo,
-                Password = password
-            };
+            var correoExiste = await ApiService.VerificarCorreoExistenteAsync(correo.Trim().ToLower());
 
-            await CrownBuilders.DatabaseHelper.GuardarTrabajadorAsync(nuevoTrabajador);
+            if (correoExiste)
+            {
+                cargando = false;
+                mensajeError = "Este correo electrónico ya está registrado en el sistema.";
+                return;
+            }
+
+            codigoGenerado = "123456";
+            string mensajeSms = $"Tu codigo de verificacion de Crown Builders es: {codigoGenerado}";
+            string numeroCompleto = $"+1{telefono.Value}";
+
+            string codigoRecibido = await ApiService.EnviarSmsAsync(numeroCompleto, mensajeSms);
             
-            // Éxito al guardar, mostramos el modal para ingresar el código de validación
+            if (!string.IsNullOrEmpty(codigoRecibido))
+            {
+                codigoGenerado = codigoRecibido;
+            }
+
+            codigoIngresado = "123456"; // Autocompletar por defecto para pruebas
             mostrandoVerificacion = true;
         }
         catch (Exception ex)
         {
-            mensajeError = "Error al guardar el perfil en la base de datos.";
-            Console.WriteLine(ex.Message);
+            mensajeError = "Error al conectar con el servidor: " + ex.Message;
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
         }
     }
 
-    // Función auxiliar para validar correo
-    private bool EsCorreoValido(string email)
+    private async Task VerificarCodigo()
+    {
+        mensajeError = string.Empty;
+
+        string inputLimpio = codigoIngresado?.Trim() ?? "";
+        bool codigoValido = (inputLimpio == codigoGenerado) || (inputLimpio == "123456");
+
+        if (!codigoValido) 
+        { 
+            mensajeError = "Código incorrecto. En modo pruebas usa: 123456";
+            StateHasChanged();
+            return;
+        }
+
+        if (!telefono.HasValue)
+        {
+            mensajeError = "El número de teléfono es obligatorio.";
+            StateHasChanged();
+            return; 
+        }
+
+        cargando = true;
+        StateHasChanged();
+
+        await Task.Yield(); // Cede un ciclo al hilo principal para evitar congelamiento visual en Android
+
+        try
+        {
+            var nuevoTrabajador = new CrownBuilders.Trabajador {
+                Nombre = nombre, 
+                Ciudad = ciudad, 
+                Correo = correo.Trim().ToLower(), 
+                Password = password, 
+                Experiencia = experiencia ?? 0, 
+                Telefono = telefono.Value.ToString(), 
+                TieneVehiculo = tieneVehiculo, 
+                TieneHerramientas = tieneHerramientas,
+                Oficio = oficio,
+                Salario = (int)(salario ?? 0),
+                FotoPerfil = !string.IsNullOrEmpty(fotoPerfilBase64) ? fotoPerfilBase64 : "default",
+                EstaDisponible = true
+            };
+            
+            var resultadoAPI = await Task.Run(() => ApiService.RegistrarTrabajador(nuevoTrabajador));
+
+            if (resultadoAPI != null && resultadoAPI.Exitoso)
+            {
+                nuevoTrabajador.Id = resultadoAPI.Id;
+                
+                try
+                {
+                    await DatabaseHelper.GuardarTrabajadorAsync(nuevoTrabajador);
+                }
+                catch (Exception dbEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Error en base local SQLite: {dbEx.Message}");
+                }
+                
+                mostrandoVerificacion = false;
+                cargando = false;
+                StateHasChanged();
+
+                await JS.InvokeVoidAsync("alert", "¡Registro exitoso! Cuenta creada en la nube.");
+                Navigation.NavigateTo("/companias-disponibles");
+            }
+            else
+            {
+                mensajeError = resultadoAPI?.Mensaje ?? "Error al registrar en Azure";
+                cargando = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "Error de conexión con Azure: " + ex.Message;
+            cargando = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CargarFoto(InputFileChangeEventArgs e)
     {
         try
         {
-            var addr = new System.Net.Mail.MailAddress(email);
-            return addr.Address == email;
+            var file = e.File;
+            if (file != null)
+            {
+                // Soporte hasta 15MB para fotos de alta resolución tomadas por cámaras de teléfonos
+                using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 15);
+                using var ms = new System.IO.MemoryStream();
+                await stream.CopyToAsync(ms);
+                var bytes = ms.ToArray();
+                
+                string contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType;
+                fotoPerfilBase64 = $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+                
+                mensajeError = string.Empty;
+                StateHasChanged(); // Forzar refresco inmediato del componente para mostrar la vista previa en el círculo
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error cargando foto: {ex.Message}");
+            mensajeError = "No se pudo cargar la imagen. Intenta seleccionar otra foto más liviana.";
+            StateHasChanged();
+        }
+    }
+
+    private bool EsCorreoValido(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return false;
+        try
+        {
+            return Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.IgnoreCase);
         }
         catch
         {
             return false;
         }
     }
-
-    private void VerificarCodigo()
-    {
-        if (codigoIngresado == "1234") // Simulación
-        {
-            mostrandoVerificacion = false;
-            Navigation.NavigateTo("/companias-disponibles");
-        }
-        else { mensajeError = "Código incorrecto."; }
-    }
-
-    private async Task MostrarPrivacidad()
-    {
-        string textoLegal = "TÉRMINOS DE USO Y PRIVACIDAD DE CROWN BUILDERS\n\n" +
-        "1. PRIVACIDAD: Tus datos son sagrados. Nunca serán vendidos, compartidos ni comercializados.\n" +
-        "2. SEGURIDAD: Toda tu actividad está protegida con cifrado de nivel bancario.\n" +
-        "3. CONEXIÓN: Crown Builders es una herramienta tecnológica para conectar personas. No somos parte de los acuerdos, contratos o pagos realizados entre usuarios. Tú decides con quién trabajar y bajo qué términos.\n" +
-        "4. RESPONSABILIDAD: Trabajamos constantemente para validar perfiles y asegurar una comunidad de confianza. Sin embargo, al ser una plataforma abierta, cada usuario es responsable de verificar con quién interactúa y de sus propias acciones.\n" +
-        "5. EDAD: Al registrarte, confirmas ser mayor de 18 años.\n" +
-        "6. TRANSPARENCIA: Sin letras pequeñas. Nuestra intención es facilitarte el trabajo, no complicarte con burocracia.\n" +
-        "7. PAGOS Y CANCELACIONES: Tu facturación es mensual basada en tu fecha de registro. Puedes eliminar tu cuenta en cualquier momento; el acceso se restringirá de inmediato. No realizamos reembolsos. Si decides cancelar, el acceso continuará hasta el final del periodo ya pagado. Recomendamos gestionar la baja un día antes de tu fecha de cobro.\n\n" +
-        "CROWN BUILDERS: Devolviendo la corona a la clase que la merece.";
-
-        await JS.InvokeVoidAsync("alert", textoLegal);
-    }
-
-    private async Task CargarFoto(InputFileChangeEventArgs e) => Console.WriteLine("Foto seleccionada");
-    private void Volver() => Navigation.NavigateTo("/login-trabajador");
+    
+    private void MostrarTerminos() => mostrandoTerminos = true;
 }

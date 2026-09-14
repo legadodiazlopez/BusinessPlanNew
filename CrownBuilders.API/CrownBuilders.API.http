@@ -1,0 +1,6 @@
+@CrownBuilders.API_HostAddress = http://localhost:5136
+
+GET {{CrownBuilders.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

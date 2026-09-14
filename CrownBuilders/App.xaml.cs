@@ -6,8 +6,7 @@
         {
             InitializeComponent();
 
-            // Forzamos a que la página principal inicialice el contenedor híbrido de Blazor
-            MainPage = new MainPage();
+            MainPage = new MainPage(); 
         }
     }
 }

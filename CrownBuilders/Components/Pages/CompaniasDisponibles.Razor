@@ -1,5 +1,6 @@
 @page "/companias-disponibles"
 @using CrownBuilders
+@using System.Net.Http.Json
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -8,7 +9,6 @@
     .text-navy { color: var(--navy); }
     .btn-gold { background-color: var(--navy); color: white; border: 2px solid var(--gold); }
     .card-custom { border: 2px solid var(--gold); border-radius: 15px; }
-    .star-gold { color: var(--gold); }
     
     .modal-overlay {
         position: fixed;
@@ -40,40 +40,56 @@
                @bind="textoBusqueda" @bind:event="oninput" />
     </div>
 
-    <div class="row">
-        @foreach (var c in CompaniasFiltradas)
-        {
-            <div class="col-md-6 mb-4">
-                <div class="card shadow-sm h-100 card-custom">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center mb-3">
-                            <div style="width: 60px; height: 60px; background: #eee; border-radius: 50%; margin-right: 15px;"></div>
-                            <div>
-                                <h5 class="fw-bold text-navy m-0">@c.Nombre</h5>
-                                <small class="text-muted">@c.Ciudad</small>
+    @if (estaCargando)
+    {
+        <div class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando compañías...</span>
+            </div>
+            <p class="mt-2 text-muted small">Cargando directorio de compañías...</p>
+        </div>
+    }
+    else if (!CompaniasFiltradas.Any())
+    {
+        <div class="text-center my-5">
+            <p class="text-muted">No se encontraron compañías con esa búsqueda.</p>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var c in CompaniasFiltradas)
+            {
+                <div class="col-md-6 mb-4">
+                    <div class="card shadow-sm h-100 card-custom">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-3">
+                                <div style="width: 60px; height: 60px; background: #eee; border-radius: 50%; margin-right: 15px;" class="d-flex align-items-center justify-content-center fw-bold text-navy">
+                                    @(string.IsNullOrEmpty(c.Nombre) ? "C" : c.Nombre.Substring(0, 1).ToUpper())
+                                </div>
+                                <div>
+                                    <h5 class="fw-bold text-navy m-0">@c.Nombre</h5>
+                                    <small class="text-muted">@c.Ciudad</small>
+                                </div>
                             </div>
-                        </div>
-                        <div class="mb-3 small">
-                            <div class="d-flex justify-content-between"><span>Puntualidad:</span> <span class="star-gold">@GenerarEstrellas(c.Puntualidad)</span></div>
-                            <div class="d-flex justify-content-between"><span>Pagos a tiempo:</span> <span class="star-gold">@GenerarEstrellas(c.Pagos)</span></div>
-                            <div class="d-flex justify-content-between"><span>Trato humano:</span> <span class="star-gold">@GenerarEstrellas(c.Trato)</span></div>
-                        </div>
-                        <p class="card-text small text-muted border-top pt-2">Especialidad: <strong>@c.Especialidad</strong></p>
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <span class="fw-bold text-navy fs-5">$@c.Pago.ToString("F2") / hr</span>
-                            <button class="btn btn-gold btn-sm px-4" @onclick="() => ContactarCompania(c.Nombre)">Contactar</button>
+                            <p class="card-text small text-muted border-top pt-2 mb-1">Especialidad: <strong>@c.Especialidad</strong></p>
+
+                            <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-3">
+                                <span class="fw-bold text-navy fs-5">$@c.MontoPago.ToString("F2") / hr</span>
+                                <button class="btn btn-gold btn-sm px-4" @onclick="() => ContactarCompania(c)">Contactar</button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        }
-    </div>
+            }
+        </div>
+    }
 </div>
 
 @if (mostrarConfig)
 {
     <div class="modal-overlay">
-        <div class="card p-4 shadow" style="width: 90%; border-radius: 15px;">
+        <div class="card p-4 shadow" style="width: 90%; max-width: 400px; border-radius: 15px;">
             <h5 class="fw-bold text-navy mb-4">Configuración</h5>
             
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -94,58 +110,132 @@
 @code {
     private string textoBusqueda = "";
     private bool mostrarConfig = false;
-    private bool estaDisponible = true; 
+    private bool estaDisponible = true;
+    private bool estaCargando = true;
 
     private CrownBuilders.Trabajador trabajador = new CrownBuilders.Trabajador();
-
-    protected override async Task OnInitializedAsync()
+    private List<Compania> listaCompanias = new List<Compania>();
+    
+    // Instancia estática blindada (Bypass de SSL agregado para igualar a la compañía)
+    private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
     {
+        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+    })
+    {
+        BaseAddress = new Uri("https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/"),
+        Timeout = TimeSpan.FromSeconds(15) // Aumentado a 15s para dar margen a Azure
+    };
+
+    protected override void OnInitialized()
+    {
+        // Ejecutar sin bloquear el ciclo de vida de Blazor.
+        _ = CargarDatosDinamicosAsync();
+    }
+
+    private async Task CargarDatosDinamicosAsync()
+    {
+        // FASE 1: Carga Local-First concurrente (Caché)
         try
         {
-            var trabajadores = await DatabaseHelper.ObtenerTrabajadoresAsync();
+            var trabajadoresTask = Task.Run(() => DatabaseHelper.ObtenerTrabajadoresAsync());
+            var companiasTask = Task.Run(() => DatabaseHelper.ObtenerCompaniasAsync());
+            
+            await Task.WhenAll(trabajadoresTask, companiasTask);
+            
+            var trabajadores = await trabajadoresTask;
             if (trabajadores != null && trabajadores.Count > 0)
             {
                 trabajador = trabajadores[0];
             }
+
+            var resultadoDb = await companiasTask;
+            if (resultadoDb != null && resultadoDb.Any())
+            {
+                listaCompanias = resultadoDb;
+                estaCargando = false;
+                await InvokeAsync(StateHasChanged); // El usuario ya ve datos casi al instante
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error al inicializar trabajador: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CARGA CACHÉ] Error: {ex.Message}");
+        }
+
+        // FASE 2: Actualización desde Azure (Nube) -> Recupera TODAS las compañías reales
+        try
+        {
+            System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] Obteniendo lista completa desde Azure...");
+            var response = await _httpClient.GetAsync("Perfil/listar-companias");
+            System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Respuesta Azure: {response.StatusCode}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var companiasNube = await response.Content.ReadFromJsonAsync<List<Compania>>();
+                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Compañías recibidas: {companiasNube?.Count ?? 0}");
+                
+                if (companiasNube != null && companiasNube.Any())
+                {
+                    // Reemplazamos la caché local con la lista fresca de la base de datos central
+                    listaCompanias = companiasNube;
+                    System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Lista actualizada con {companiasNube.Count} compañías");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] La respuesta de Azure está vacía o nula");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error en respuesta Azure: {response.StatusCode}");
+                var errorContent = await response.Content.ReadAsStringAsync();
+                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error contenido: {errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AZURE] Error al obtener lista de la nube: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[AZURE] Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            estaCargando = false;
+            await InvokeAsync(StateHasChanged); // Actualiza la pantalla final para el usuario
         }
     }
 
-    public class Compania 
+    public class Compania
     {
-        public string Nombre { get; set; }
-        public string Ciudad { get; set; }
-        public string Especialidad { get; set; }
-        public double Pago { get; set; }
-        public int Puntualidad { get; set; }
-        public int Pagos { get; set; }
-        public int Trato { get; set; }
+        public int Id { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string Ciudad { get; set; } = string.Empty;
+        public string Especialidad { get; set; } = string.Empty;
+        public double MontoPago { get; set; }
+        
+        // Mantengo estas propiedades ocultas en la clase por si la API las sigue enviando
+        // y así evitamos errores de deserialización, aunque ya no se muestren en pantalla.
+        public int Puntualidad { get; set; } = 5;
+        public int Pagos { get; set; } = 5;
+        public int Trato { get; set; } = 5;
     }
 
-    private List<Compania> listaCompanias = new List<Compania> 
-    {
-        new Compania { Nombre = "Builders NY", Ciudad = "Long Island", Especialidad = "Pisos", Pago = 40.00, Puntualidad = 5, Pagos = 5, Trato = 4 },
-        new Compania { Nombre = "Wood Masters", Ciudad = "Catskills", Especialidad = "Madera", Pago = 42.50, Puntualidad = 4, Pagos = 5, Trato = 5 }
-    };
-
-    private List<Compania> CompaniasFiltradas => listaCompanias
-        .Where(c => string.IsNullOrEmpty(textoBusqueda) || c.Ciudad.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase) || c.Especialidad.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase))
-        .ToList();
-
-    private string GenerarEstrellas(int c) => new string('★', c) + new string('☆', 5 - c);
+    private IEnumerable<Compania> CompaniasFiltradas => listaCompanias
+        .Where(c => string.IsNullOrEmpty(textoBusqueda) || 
+                    c.Ciudad.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase) || 
+                    c.Especialidad.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase));
 
     private void CambiarEstado(ChangeEventArgs e) 
     {
-        estaDisponible = (bool)e.Value;
+        if (e.Value is bool val) estaDisponible = val;
     }
 
     private void AbrirConfiguracion() => mostrarConfig = true;
     private void CerrarModal() => mostrarConfig = false;
 
-    private void ContactarCompania(string nombre) => Navigation.NavigateTo("/mensajeria");
+    private void ContactarCompania(Compania compania) 
+    {
+        Navigation.NavigateTo($"/mensajeria-trabajador/{Uri.EscapeDataString(compania.Nombre)}/{compania.Id}");
+    }
+
     private void EditarPerfil() => Navigation.NavigateTo("/editar-perfil");
     private void CerrarSesion() => Navigation.NavigateTo("/login-trabajador");
 
@@ -156,15 +246,9 @@
         {
             try
             {
-                // Purgamos base de datos SQLite
                 await DatabaseHelper.PurgarTrabajadoresAsync();
-                
-                // Limpiamos variable local
                 trabajador = new CrownBuilders.Trabajador();
-                
                 await JS.InvokeVoidAsync("alert", "Cuenta eliminada exitosamente.");
-                
-                // Redirección estricta a la pantalla principal de selección de perfiles (/), destruyendo el historial o caché anterior.
                 Navigation.NavigateTo("/", forceLoad: true);
             }
             catch (Exception ex)

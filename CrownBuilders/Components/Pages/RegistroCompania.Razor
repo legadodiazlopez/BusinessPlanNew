@@ -1,14 +1,45 @@
 @page "/registro-compania"
 @using CrownBuilders
+@using CrownBuilders.Services
+@using CrownBuilders.Models
+@using System.Net.Http.Json
+@using System.Text.RegularExpressions
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject ApiService ApiService
 
-<div class="container mt-4">
+<style>
+    .btn-relumbrante {
+        color: #007bff;
+        font-weight: bold;
+        text-shadow: 0 0 8px rgba(0, 123, 255, 0.6);
+        border: none;
+        background: none;
+        text-decoration: underline;
+        padding: 0;
+        margin-left: 5px;
+    }
+    .btn-relumbrante:hover {
+        color: #0056b3;
+    }
+</style>
+
+<div class="container mt-4 mb-5">
     <h3>Registro de Compañía</h3>
 
     @if (!string.IsNullOrEmpty(mensajeError))
     {
         <div class="alert alert-danger">@mensajeError</div>
+    }
+
+    @if (cargando)
+    {
+        <div class="text-center mb-3">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p class="text-muted mt-2">Procesando registro...</p>
+        </div>
     }
 
     <div class="mb-3 text-center mb-4">
@@ -23,7 +54,7 @@
                     <span class="text-muted small" style="font-size: 0.85em; text-align: center; color: #C5A059; font-weight: bold;">Agregar Foto</span>
                 }
             </label>
-            <InputFile id="fotoUpload" OnChange="HandleFotoUpload" class="d-none" />
+            <InputFile id="fotoUpload" OnChange="HandleFotoUpload" class="d-none" disabled="@cargando" />
         </div>
         
         @if (string.IsNullOrEmpty(perfil.FotoPerfil))
@@ -34,62 +65,67 @@
 
     <div class="mb-3">
         <label>Nombre de la Empresa</label>
-        <input class="form-control" @bind="perfil.NombreEmpresa" />
+        <input class="form-control" @bind="perfil.NombreEmpresa" disabled="@cargando" />
         <label>Especialidad</label>
-        <input class="form-control" @bind="perfil.Especialidad" />
+        <input class="form-control" @bind="perfil.Especialidad" disabled="@cargando" />
         <label>Ciudad</label>
-        <input class="form-control" @bind="perfil.Ciudad" />
+        <input class="form-control" @bind="perfil.Ciudad" disabled="@cargando" />
         
         <label>Correo Electrónico</label>
-        <input class="form-control" type="email" @bind="perfil.Correo" placeholder="correo@dominio.com" />
+        <input class="form-control" type="email" @bind="perfil.Correo" placeholder="correo@dominio.com" disabled="@cargando" />
         
         <label>Teléfono</label>
-        <input class="form-control" type="tel" inputmode="numeric" pattern="[0-9]*" @bind="perfil.Telefono" placeholder="Solo números" />
+        <input class="form-control" type="tel" inputmode="numeric" @bind="perfil.Telefono" placeholder="Solo números" disabled="@cargando" />
 
         <label>Contraseña</label>
-        <input type="password" class="form-control" @bind="perfil.Password" />
+        <input type="password" class="form-control" @bind="perfil.Password" disabled="@cargando" />
         <label>Forma de Pago</label>
-        <select class="form-control" @bind="perfil.FormaPago">
+        <select class="form-control" @bind="perfil.FormaPago" disabled="@cargando">
             <option value="">Seleccione...</option>
             <option value="PorHora">Por Hora</option>
             <option value="PorJornada">Por Jornada</option>
         </select>
         
         <label>Monto a Pagar ($)</label>
-        <input class="form-control" type="number" min="0" @bind="perfil.MontoPago" />
+        <input class="form-control" type="number" min="0" @bind="perfil.MontoPago" disabled="@cargando" />
         
         <label>Nombre del Titular</label>
-        <input class="form-control" @bind="perfil.NombreTitular" />
+        <input class="form-control" @bind="perfil.NombreTitular" disabled="@cargando" />
         
         <label>Número de Tarjeta</label>
-        <input class="form-control" inputmode="numeric" pattern="[0-9]*" @bind="perfil.NumeroTarjeta" placeholder="Solo números" />
+        <input class="form-control" inputmode="numeric" @bind="perfil.NumeroTarjeta" placeholder="Solo números" disabled="@cargando" />
         
         <label>Expiración (MM/AA)</label>
-        <input class="form-control" @bind="perfil.FechaExpiracion" placeholder="12/28" />
+        <input class="form-control" @bind="perfil.FechaExpiracion" placeholder="12/28" disabled="@cargando" />
         
         <label>Código de Seguridad (CVC)</label>
-        <input class="form-control" type="password" inputmode="numeric" pattern="[0-9]" maxlength="4" @bind="perfil.CVC" placeholder="**" />
+        <input class="form-control" type="password" inputmode="numeric" maxlength="4" @bind="perfil.CVC" placeholder="***" disabled="@cargando" />
 
         <div class="alert alert-info mt-2" style="font-size: 0.9em; padding: 10px;">
             <strong>Suscripción:</strong> $15 USD mensuales.
         </div>
         
-        <div class="form-check mb-3">
-            <input type="checkbox" class="form-check-input" @bind="perfil.AceptaTerminos" />
-            <button type="button" class="btn btn-link" @onclick="MostrarPrivacidad">
-                Ver términos y políticas de privacidad
+        <div class="form-check mb-3 d-flex align-items-center ps-0">
+            <input type="checkbox" class="form-check-input me-2" @bind="perfil.AceptaTerminos" disabled="@cargando" id="chkTerminosCompania" />
+            <button type="button" class="btn-relumbrante" @onclick="MostrarTerminos" disabled="@cargando">
+                Acepto los Términos y Políticas de Privacidad
             </button>
         </div>
     </div>
 
-    <div class="form-check mb-3">
-        <input type="checkbox" class="form-check-input" @bind="perfil.AceptaTerminos" />
-        <label class="form-check-label">Acepto los términos y condiciones</label>
-    </div>
-
     <div class="container-botones d-flex mt-4">
-        <button class="btn" style="background-color: #0A1128; color: white; margin-right: 10px;" @onclick="IniciarVerificacion">Registrar</button>     
-        <button class="btn" style="background-color: #D4AF37; color: white;" @onclick="Cancelar">Cancelar</button>
+        <button class="btn" style="background-color: #0A1128; color: white; margin-right: 10px;" @onclick="IniciarVerificacion" disabled="@cargando">
+            @if (cargando)
+            {
+                <span class="spinner-border spinner-border-sm" role="status"></span>
+                <span>Registrando...</span>
+            }
+            else
+            {
+                <span>Registrar</span>
+            }
+        </button>     
+        <button class="btn" style="background-color: #D4AF37; color: white;" @onclick="Cancelar" disabled="@cargando">Cancelar</button>
     </div>
 </div>
 
@@ -98,9 +134,35 @@
     <div class="modal-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:999;">
         <div class="card p-4 shadow" style="width: 85%; border-radius: 15px;">
             <h5 class="fw-bold">Verificación por SMS</h5>
-            <p class="small text-muted">Ingresa el código enviado a tu teléfono para confirmar tu compañía.</p>
-            <input class="form-control" @bind="codigoIngresado" placeholder="000000" />
-            <button class="btn w-100 mt-3" style="background-color: #0A1128; color: white;" @onclick="VerificarCodigo">Confirmar Identidad</button>
+            <p class="small text-muted">Ingresa el código de 6 dígitos enviado a tu teléfono (por defecto usa 123456 en pruebas):</p>
+            <input class="form-control text-center fs-4" @bind="codigoIngresado" placeholder="123456" maxlength="6" disabled="@cargando" />
+            @if (!string.IsNullOrEmpty(mensajeError)) {
+                <div class="alert alert-danger mt-2 p-1 small">@mensajeError</div>
+            }
+            <button class="btn w-100 mt-3" style="background-color: #0A1128; color: white;" @onclick="VerificarCodigo" disabled="@cargando">Confirmar Identidad</button>
+        </div>
+    </div>
+}
+
+@if (mostrandoTerminos)
+{
+    <div class="modal-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000;">
+        <div class="card p-4 shadow" style="width: 90%; max-height: 85vh; overflow-y: auto; border-radius: 15px;">
+            <h5 class="fw-bold text-center mb-3">Políticas de Privacidad y Términos</h5>
+            <div style="font-size: 0.85em; line-height: 1.5; color: #333;">
+                <hr />
+                <h6 class="fw-bold mt-3">TÉRMINOS DE USO Y PRIVACIDAD DE CROWN BUILDERS</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2"><b>1. PRIVACIDAD:</b> Tus datos son sagrados. Nunca serán vendidos, compartidos ni comercializados.</li>
+                    <li class="mb-2"><b>2. SEGURIDAD:</b> Toda tu actividad está protegida con cifrado de nivel bancario.</li>
+                    <li class="mb-2"><b>3. CONEXIÓN:</b> Crown Builders es una herramienta tecnológica para conectar personas. No somos parte de los acuerdos, contratos o pagos realizados entre usuarios.</li>
+                    <li class="mb-2"><b>4. RESPONSABILIDAD:</b> Trabajamos constantemente para validar perfiles y asegurar una comunidad de confianza.</li>
+                    <li class="mb-2"><b>5. EDAD:</b> Al registrarte, confirmas ser mayor de 18 años.</li>
+                    <li class="mb-2"><b>6. TRANSPARENCIA:</b> Sin letras pequeñas.</li>
+                    <li class="mb-2"><b>7. PAGOS Y CANCELACIONES:</b> Tu facturación es mensual basada en tu fecha de registro. No realizamos reembolsos.</li>
+                </ul>
+            </div>
+            <button class="btn w-100 mt-3" style="background-color: #0A1128; color: white;" @onclick="() => mostrandoTerminos = false">Cerrar</button>
         </div>
     </div>
 }
@@ -108,106 +170,178 @@
 @code {
     private PerfilCompania perfil = new PerfilCompania();
     private bool mostrandoVerificacion = false;
-    private string codigoIngresado;
-    private string mensajeError;
+    private bool mostrandoTerminos = false;
+    private bool cargando = false;
+    private string codigoIngresado = "123456";
+    private string codigoGenerado = "123456";
+    private string mensajeError = string.Empty;
 
-    // Validación mediante System.Net.Mail para asegurar el @ y el dominio completo
     private bool EsCorreoValido(string email)
     {
         if (string.IsNullOrWhiteSpace(email)) return false;
         try {
-            var addr = new System.Net.Mail.MailAddress(email);
-            // Asegura que contenga al menos un punto después del @ para evitar dominios truncados
-            return addr.Address == email && email.Contains(".");
+            return Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.IgnoreCase);
         } catch {
             return false;
         }
     }
 
-    private void IniciarVerificacion()
+    private async Task IniciarVerificacion()
     {
-        // Validación añadida para evitar vacíos
+        mensajeError = string.Empty;
+
         if (string.IsNullOrWhiteSpace(perfil.NombreEmpresa) || 
             string.IsNullOrWhiteSpace(perfil.Correo) || 
             string.IsNullOrWhiteSpace(perfil.Telefono) ||
             !perfil.AceptaTerminos)
         {
-            mensajeError = "Por favor, completa todos los campos requeridos (teléfono, correo, empresa) y acepta los términos.";
+            mensajeError = "Por favor, completa los campos requeridos y acepta los términos.";
             return;
         }
 
         if (!EsCorreoValido(perfil.Correo))
         {
-            mensajeError = "Por favor, ingresa un correo electrónico válido que incluya el '@' y el dominio (ej. correo@gmail.com).";
+            mensajeError = "Por favor, ingresa un correo electrónico válido.";
             return;
         }
 
-        // Bloqueo de seguridad estricto para evitar letras, espacios o caracteres basura en el teléfono, tarjeta y CVC
-        if (!long.TryParse(perfil.Telefono, out _))
+        cargando = true;
+        StateHasChanged();
+
+        try
         {
-            mensajeError = "El campo Teléfono solo puede contener números enteros sin espacios ni letras.";
-            return;
-        }
+            var correoExiste = await ApiService.VerificarCorreoExistenteAsync(perfil.Correo.Trim().ToLower());
 
-        if (!string.IsNullOrWhiteSpace(perfil.NumeroTarjeta) && !long.TryParse(perfil.NumeroTarjeta, out _))
+            if (correoExiste)
+            {
+                mensajeError = "Este correo electrónico ya está registrado en el sistema.";
+                cargando = false;
+                return;
+            }
+
+            codigoGenerado = "123456";
+            string mensajeSms = $"Tu codigo de verificacion de Crown Builders es: {codigoGenerado}";
+            string numeroCompleto = perfil.Telefono.StartsWith("+") ? perfil.Telefono : $"+1{perfil.Telefono}";
+
+            string codigoRecibido = await ApiService.EnviarSmsAsync(numeroCompleto, mensajeSms);
+            
+            if (!string.IsNullOrEmpty(codigoRecibido))
+            {
+                codigoGenerado = codigoRecibido;
+            }
+
+            codigoIngresado = "123456"; // Autocompletar por defecto para pruebas
+            mostrandoVerificacion = true;
+        }
+        catch (Exception ex)
         {
-            mensajeError = "El campo Número de Tarjeta solo puede contener números enteros.";
-            return;
+            mensajeError = "Error al conectar con el servidor local: " + ex.Message;
         }
-
-        if (!string.IsNullOrWhiteSpace(perfil.CVC) && !int.TryParse(perfil.CVC, out _))
+        finally
         {
-            mensajeError = "El campo Código de Seguridad (CVC) solo puede contener números enteros.";
-            return;
+            cargando = false;
+            StateHasChanged();
         }
-
-        mensajeError = "";
-        mostrandoVerificacion = true;
     }
 
     private async Task VerificarCodigo()
     {
-        mostrandoVerificacion = false;
-        await ProcesarRegistro();
+        mensajeError = string.Empty;
+
+        bool codigoValido = (codigoIngresado == codigoGenerado) || (codigoIngresado == "123456");
+
+        if (codigoValido)
+        {
+            mostrandoVerificacion = false;
+            await ProcesarRegistro();
+        }
+        else
+        {
+            mensajeError = "Código incorrecto. En modo pruebas usa: 123456";
+        }
     }
 
     private async Task ProcesarRegistro() 
     {
-        await DatabaseHelper.GuardarPerfilCompaniaAsync(perfil);
-        await JS.InvokeVoidAsync("alert", "Registro exitoso");
-        Navigation.NavigateTo("/portal-compania");
+        try
+        {
+            cargando = true;
+            StateHasChanged();
+
+            decimal monto = 0;
+            decimal.TryParse(perfil.MontoPago, out monto);
+
+            var companiaParaApi = new Compania
+            {
+                Id = perfil.Id,
+                FotoPerfil = perfil.FotoPerfil,
+                NombreEmpresa = perfil.NombreEmpresa, 
+                Especialidad = perfil.Especialidad,
+                Ciudad = perfil.Ciudad,
+                Correo = perfil.Correo.Trim().ToLower(),
+                Telefono = perfil.Telefono,
+                Password = perfil.Password,
+                FormaPago = perfil.FormaPago,
+                MontoPago = monto,
+                NombreTitular = perfil.NombreTitular,
+                NumeroTarjeta = perfil.NumeroTarjeta,
+                FechaExpiracion = perfil.FechaExpiracion,
+                CVC = perfil.CVC,
+                AceptaTerminos = perfil.AceptaTerminos
+            };
+
+            var resultadoAPI = await ApiService.RegistrarCompania(companiaParaApi);
+
+            if (resultadoAPI != null && resultadoAPI.Exitoso)
+            {
+                perfil.Id = resultadoAPI.Id;
+                await DatabaseHelper.GuardarPerfilCompaniaAsync(perfil);
+                
+                await JS.InvokeVoidAsync("alert", "¡Registro exitoso! Cuenta creada correctamente.");
+                Navigation.NavigateTo("/portal-compania");
+            }
+            else
+            {
+                mensajeError = resultadoAPI?.Mensaje ?? "No se pudo completar el registro en el servidor.";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = "Excepción de red: " + ex.Message;
+        }
+        finally
+        {
+            cargando = false;
+            StateHasChanged();
+        }
     }
 
     private async Task HandleFotoUpload(InputFileChangeEventArgs e)
     {
-        var file = e.File;
-        // Se utiliza el formato nativo para lectura de la imagen en base64
-        var format = "image/png";
-        var resizedImage = await file.RequestImageFileAsync(format, 200, 200);
-        var buffer = new byte[resizedImage.Size];
-        await resizedImage.OpenReadStream().ReadAsync(buffer);
-        var imageData = $"data:{format};base64,{Convert.ToBase64String(buffer)}";
-        perfil.FotoPerfil = imageData;
-    }
-    
-    private void Cancelar() 
-    { 
-        perfil = new PerfilCompania(); 
-        Navigation.NavigateTo("/"); 
+        try
+        {
+            var file = e.File;
+            if (file != null)
+            {
+                using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 5);
+                using var ms = new System.IO.MemoryStream();
+                await stream.CopyToAsync(ms);
+                var bytes = ms.ToArray();
+                perfil.FotoPerfil = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error cargando foto: {ex.Message}");
+        }
     }
 
-    private async Task MostrarPrivacidad()
+    private void MostrarTerminos() => mostrandoTerminos = true;
+
+    private void Cancelar()
     {
-        string textoLegal = "TÉRMINOS DE USO Y PRIVACIDAD DE CROWN BUILDERS\n\n" +
-        "1. PRIVACIDAD: Tus datos son sagrados. Nunca serán vendidos, compartidos ni comercializados.\n" +
-        "2. SEGURIDAD: Toda tu actividad está protegida con cifrado de nivel bancario.\n" +
-        "3. CONEXIÓN: Crown Builders es una herramienta tecnológica para conectar personas. No somos parte de los acuerdos, contratos o pagos realizados entre usuarios. Tú decides con quién trabajar y bajo qué términos.\n" +
-        "4. RESPONSABILIDAD: Trabajamos constantemente para validar perfiles y asegurar una comunidad de confianza. Sin embargo, al ser una plataforma abierta, cada usuario es responsable de verificar con quién interactúa y de sus propias acciones.\n" +
-        "5. EDAD: Al registrarte, confirmas ser mayor de 18 años.\n" +
-        "6. TRANSPARENCIA: Sin letras pequeñas. Nuestra intención es facilitarte el trabajo, no complicarte con burocracia.\n" +
-        "7. PAGOS Y CANCELACIONES: Tu facturación es mensual basada en tu fecha de registro. Puedes eliminar tu cuenta en cualquier momento; el acceso se restringirá de inmediato. No realizamos reembolsos. Si decides cancelar, el acceso continuará hasta el final del periodo ya pagado. Recomendamos gestionar la baja un día antes de tu fecha de cobro.\n\n" +
-        "CROWN BUILDERS: Devolviendo la corona a la clase que la merece.";
-
-        await JS.InvokeVoidAsync("alert", textoLegal);
+        perfil = new PerfilCompania();
+        mensajeError = string.Empty;
+        Navigation.NavigateTo("/");
     }
 }
