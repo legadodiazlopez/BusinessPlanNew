@@ -2,8 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
+using CrownBuilders.API.Services;
 
 namespace CrownBuilders.API.Controllers
 {
@@ -12,10 +11,12 @@ namespace CrownBuilders.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly JwtTokenService _jwtTokenService;
 
-        public AuthController(ApplicationDbContext context)
+        public AuthController(ApplicationDbContext context, JwtTokenService jwtTokenService)
         {
             _context = context;
+            _jwtTokenService = jwtTokenService;
         }
 
         // --- OBTENER TODOS LOS TRABAJADORES ---
@@ -78,8 +79,10 @@ namespace CrownBuilders.API.Controllers
 
                 System.Diagnostics.Debug.WriteLine($"[AUTH] Login exitoso para trabajador ID: {trabajador.Id}");
                 
-                // Generar un token simple (en producción usar JWT real)
-                var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{trabajador.Id}:{DateTime.UtcNow.Ticks}"));
+                var token = _jwtTokenService.CreateToken(
+                    trabajador.Id,
+                    "trabajador",
+                    trabajador.Nombre);
                 
                 return Ok(new AuthResponse { 
                     Exitoso = true,
@@ -116,8 +119,10 @@ namespace CrownBuilders.API.Controllers
                     });
                 }
 
-                // Generar un token simple (en producción usar JWT real)
-                var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{compania.Id}:{DateTime.UtcNow.Ticks}"));
+                var token = _jwtTokenService.CreateToken(
+                    compania.Id,
+                    "compania",
+                    compania.NombreEmpresa);
 
                 return Ok(new AuthResponse { 
                     Exitoso = true,

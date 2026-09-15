@@ -17,7 +17,7 @@ namespace CrownBuilders.API.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.17")
+                .HasAnnotation("ProductVersion", "10.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -93,7 +93,7 @@ namespace CrownBuilders.API.Migrations
                     b.ToTable("Companias");
                 });
 
-            modelBuilder.Entity("CrownBuilders.API.Models.Mensaje", b =>
+            modelBuilder.Entity("CrownBuilders.API.Models.Conversacion", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -102,6 +102,37 @@ namespace CrownBuilders.API.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CompaniaId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FechaCreacionUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TrabajadorId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrabajadorId", "CompaniaId")
+                        .IsUnique();
+
+                    b.ToTable("Conversaciones");
+                });
+
+            modelBuilder.Entity("CrownBuilders.API.Models.Mensaje", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("ClientMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CompaniaId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ConversacionId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("FechaEnvio")
@@ -113,12 +144,16 @@ namespace CrownBuilders.API.Migrations
 
                     b.Property<string>("Texto")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
 
                     b.Property<int>("TrabajadorId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ConversacionId", "ClientMessageId")
+                        .IsUnique();
 
                     b.ToTable("Mensajes");
                 });
@@ -222,6 +257,22 @@ namespace CrownBuilders.API.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Trabajadores");
+                });
+
+            modelBuilder.Entity("CrownBuilders.API.Models.Mensaje", b =>
+                {
+                    b.HasOne("CrownBuilders.API.Models.Conversacion", "Conversacion")
+                        .WithMany("Mensajes")
+                        .HasForeignKey("ConversacionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversacion");
+                });
+
+            modelBuilder.Entity("CrownBuilders.API.Models.Conversacion", b =>
+                {
+                    b.Navigation("Mensajes");
                 });
 #pragma warning restore 612, 618
         }

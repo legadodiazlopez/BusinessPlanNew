@@ -1,98 +1,261 @@
-using Microsoft.AspNetCore.Mvc;
+using CrownBuilders.API.Contracts;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using CrownBuilders.API.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace CrownBuilders.API.Controllers
+namespace CrownBuilders.API.Controllers;
+
+[ApiController]
+[Authorize]
+[Route("api/[controller]")]
+public sealed class MensajesController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class MensajesController : ControllerBase
+    private const int DefaultPageSize = 50;
+    private const int MaxPageSize = 100;
+
+    private readonly ApplicationDbContext _context;
+    private readonly ConversationService _conversationService;
+    private readonly MessagePersistenceService _messagePersistenceService;
+    private readonly MessageDeliveryService _messageDeliveryService;
+
+    public MensajesController(
+        ApplicationDbContext context,
+        ConversationService conversationService,
+        MessagePersistenceService messagePersistenceService,
+        MessageDeliveryService messageDeliveryService)
     {
-        private readonly ApplicationDbContext _context;
-        private readonly FirebaseNotificationService _firebaseService;
+        _context = context;
+        _conversationService = conversationService;
+        _messagePersistenceService = messagePersistenceService;
+        _messageDeliveryService = messageDeliveryService;
+    }
 
-        public MensajesController(ApplicationDbContext context, FirebaseNotificationService firebaseService)
+    [HttpPost("conversaciones")]
+    public async Task<ActionResult<ConversationResponse>> CreateConversation(
+        [FromBody] CreateConversationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = AuthenticatedUserAccessor.FromPrincipal(User);
+        if (!ConversationAccessPolicy.CanAccess(
+                request.WorkerId,
+                request.CompanyId,
+                user.UserType,
+                user.UserId))
         {
-            _context = context;
-            _firebaseService = firebaseService;
+            return Forbid();
         }
 
-        [HttpPost("guardar")]
-        public async Task<IActionResult> GuardarMensaje([FromBody] Mensaje mensaje)
+        if (!await _context.Trabajadores.AnyAsync(
+                worker => worker.Id == request.WorkerId,
+                cancellationToken) ||
+            !await _context.Companias.AnyAsync(
+                company => company.Id == request.CompanyId,
+                cancellationToken))
         {
-            _context.Mensajes.Add(mensaje);
-            await _context.SaveChangesAsync();
+            return NotFound(new { error = "No existe uno de los participantes." });
+        }
 
-            // Enviar notificación push al receptor
-            try
+        var conversation = await _conversationService.GetOrCreateAsync(
+            request.WorkerId,
+            request.CompanyId,
+            cancellationToken);
+
+        return Ok(ToConversationResponse(conversation));
+    }
+
+    [HttpPost("conversaciones/{conversationId:int}/mensajes")]
+    public async Task<ActionResult<MessageResponse>> SendMessage(
+        int conversationId,
+        [FromBody] SendMessageHttpRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var user = AuthenticatedUserAccessor.FromPrincipal(User);
+            var result = await _messagePersistenceService.SendAsync(
+                new SendMessageRequest(conversationId, request.ClientMessageId, request.Text),
+                user,
+                cancellationToken);
+            var response = MessageResponseMapper.FromEntity(result.Message);
+
+            if (result.Outcome == MessageWriteOutcome.Created)
             {
-                string? recipientToken = null;
-
-                if (mensaje.Remitente == "trabajador")
-                {
-                    // Notificar a la compañía
-                    var compania = await _context.Companias.FindAsync(mensaje.CompaniaId);
-                    recipientToken = compania?.FcmToken;
-                }
-                else if (mensaje.Remitente == "compania")
-                {
-                    // Notificar al trabajador
-                    var trabajador = await _context.Trabajadores.FindAsync(mensaje.TrabajadorId);
-                    recipientToken = trabajador?.FcmToken;
-                }
-
-                if (!string.IsNullOrEmpty(recipientToken))
-                {
-                    await _firebaseService.SendNotificationAsync(
-                        recipientToken,
-                        "Nuevo mensaje",
-                        mensaje.Texto ?? "Tienes un nuevo mensaje"
-                    );
-                    System.Diagnostics.Debug.WriteLine($"[Mensajes] Notificación push enviada al receptor");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"[Mensajes] No se encontró FCM token para el receptor");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Mensajes] Error enviando notificación: {ex.Message}");
+                await _messageDeliveryService.DeliverAsync(response, cancellationToken);
             }
 
-            return Ok(new { mensaje = "Mensaje guardado exitosamente", id = mensaje.Id });
+            return result.Outcome == MessageWriteOutcome.Created
+                ? CreatedAtAction(
+                    nameof(GetHistory),
+                    new { conversationId },
+                    response)
+                : Ok(response);
         }
-
-        [HttpGet("historial/{trabajadorId}/{companiaId}")]
-        public async Task<IActionResult> ObtenerHistorial(int trabajadorId, int companiaId)
+        catch (ConversationNotFoundException exception)
         {
-            var mensajes = await _context.Mensajes
-                .Where(m => m.TrabajadorId == trabajadorId && m.CompaniaId == companiaId)
-                .OrderBy(m => m.FechaEnvio)
-                .ToListAsync();
-            return Ok(mensajes);
+            return NotFound(new { error = exception.Message });
         }
-
-        [HttpGet("historial/trabajador/{trabajadorId}")]
-        public async Task<IActionResult> ObtenerMensajesPorTrabajador(int trabajadorId)
+        catch (UnauthorizedAccessException)
         {
-            var mensajes = await _context.Mensajes
-                .Where(m => m.TrabajadorId == trabajadorId)
-                .OrderBy(m => m.FechaEnvio)
-                .ToListAsync();
-            return Ok(mensajes);
+            return Forbid();
         }
-
-        [HttpGet("historial/compania/{companiaId}")]
-        public async Task<IActionResult> ObtenerMensajesPorCompania(int companiaId)
+        catch (MessageConflictException exception)
         {
-            var mensajes = await _context.Mensajes
-                .Where(m => m.CompaniaId == companiaId)
-                .OrderBy(m => m.FechaEnvio)
-                .ToListAsync();
-            return Ok(mensajes);
+            return Conflict(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = exception.Message });
         }
     }
+
+    [HttpGet("conversaciones/{conversationId:int}/mensajes")]
+    public async Task<ActionResult<IReadOnlyList<MessageResponse>>> GetHistory(
+        int conversationId,
+        [FromQuery] int limit = DefaultPageSize,
+        [FromQuery] DateTime? beforeSentAtUtc = null,
+        [FromQuery] int? beforeMessageId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit is < 1 or > MaxPageSize)
+        {
+            return BadRequest(new { error = $"El límite debe estar entre 1 y {MaxPageSize}." });
+        }
+
+        try
+        {
+            var user = AuthenticatedUserAccessor.FromPrincipal(User);
+            await _conversationService.GetAuthorizedAsync(conversationId, user, cancellationToken);
+
+            var query = _context.Mensajes
+                .AsNoTracking()
+                .Where(message => message.ConversacionId == conversationId);
+
+            if (beforeSentAtUtc.HasValue && beforeMessageId.HasValue)
+            {
+                query = query.Where(message =>
+                    message.FechaEnvio < beforeSentAtUtc.Value ||
+                    (message.FechaEnvio == beforeSentAtUtc.Value &&
+                     message.Id < beforeMessageId.Value));
+            }
+
+            var messages = await query
+                .OrderByDescending(message => message.FechaEnvio)
+                .ThenByDescending(message => message.Id)
+                .Take(limit)
+                .Select(message => new MessageResponse(
+                    message.Id,
+                    message.ConversacionId,
+                    message.TrabajadorId,
+                    message.CompaniaId,
+                    message.ClientMessageId,
+                    message.Remitente,
+                    message.Texto,
+                    message.FechaEnvio))
+                .ToListAsync(cancellationToken);
+
+            messages.Reverse();
+            return Ok(messages);
+        }
+        catch (ConversationNotFoundException exception)
+        {
+            return NotFound(new { error = exception.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    [Obsolete("Usar el endpoint de conversaciones con ClientMessageId.")]
+    [HttpPost("guardar")]
+    public async Task<ActionResult<MessageResponse>> SaveLegacyMessage(
+        [FromBody] LegacyMessageRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = AuthenticatedUserAccessor.FromPrincipal(User);
+        if (!ConversationAccessPolicy.CanAccess(
+                request.TrabajadorId,
+                request.CompaniaId,
+                user.UserType,
+                user.UserId))
+        {
+            return Forbid();
+        }
+
+        var conversation = await _conversationService.GetOrCreateAsync(
+            request.TrabajadorId,
+            request.CompaniaId,
+            cancellationToken);
+
+        try
+        {
+            var result = await _messagePersistenceService.SendAsync(
+                new SendMessageRequest(conversation.Id, request.ClientMessageId, request.Texto),
+                user,
+                cancellationToken);
+            var response = MessageResponseMapper.FromEntity(result.Message);
+            if (result.Outcome == MessageWriteOutcome.Created)
+            {
+                await _messageDeliveryService.DeliverAsync(response, cancellationToken);
+            }
+
+            return Ok(response);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = exception.Message });
+        }
+        catch (MessageConflictException exception)
+        {
+            return Conflict(new { error = exception.Message });
+        }
+    }
+
+    [HttpGet("historial/{trabajadorId:int}/{companiaId:int}")]
+    public async Task<ActionResult<IReadOnlyList<MessageResponse>>> GetLegacyHistory(
+        int trabajadorId,
+        int companiaId,
+        CancellationToken cancellationToken)
+    {
+        var conversation = await _context.Conversaciones
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.TrabajadorId == trabajadorId && item.CompaniaId == companiaId,
+                cancellationToken);
+
+        if (conversation is null)
+        {
+            return NotFound();
+        }
+
+        return await GetHistory(conversation.Id, DefaultPageSize, null, null, cancellationToken);
+    }
+
+    private static ConversationResponse ToConversationResponse(Conversacion conversation)
+    {
+        return new ConversationResponse(
+            conversation.Id,
+            conversation.TrabajadorId,
+            conversation.CompaniaId,
+            conversation.FechaCreacionUtc);
+    }
 }
+
+public sealed record CreateConversationRequest(int WorkerId, int CompanyId);
+
+public sealed record ConversationResponse(
+    int Id,
+    int WorkerId,
+    int CompanyId,
+    DateTime CreatedAtUtc);
+
+public sealed record SendMessageHttpRequest(Guid ClientMessageId, string Text);
+
+public sealed record LegacyMessageRequest(
+    int TrabajadorId,
+    int CompaniaId,
+    Guid ClientMessageId,
+    string Texto);

@@ -13,6 +13,8 @@ namespace CrownBuilders.Services
         private readonly HttpClient _httpClient;
         private string? _authToken;
 
+        public string? AuthToken => _authToken;
+
         // Producción/Azure:
         // private const string BaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
         // Desarrollo local:
@@ -43,6 +45,7 @@ namespace CrownBuilders.Services
         public void SetAuthToken(string? token)
         {
             _authToken = token;
+            DatabaseHelper.SetAuthToken(token);
             if (!string.IsNullOrEmpty(token))
             {
                 _httpClient.DefaultRequestHeaders.Authorization =
@@ -52,6 +55,26 @@ namespace CrownBuilders.Services
             {
                 _httpClient.DefaultRequestHeaders.Authorization = null;
             }
+        }
+
+        public async Task<ConversationApiResponse?> EnsureConversationAsync(
+            int workerId,
+            int companyId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                "mensajes/conversaciones",
+                new { WorkerId = workerId, CompanyId = companyId },
+                cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content
+                .ReadFromJsonAsync<ConversationApiResponse>(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
         }
 
         // --- AUTENTICACIÓN ---
@@ -453,5 +476,13 @@ namespace CrownBuilders.Services
     {
         public bool Exitoso { get; set; }
         public string Codigo { get; set; }
+    }
+
+    public sealed class ConversationApiResponse
+    {
+        public int Id { get; set; }
+        public int WorkerId { get; set; }
+        public int CompanyId { get; set; }
+        public DateTime CreatedAtUtc { get; set; }
     }
 }

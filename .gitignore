@@ -361,3 +361,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Especificación temporal del módulo de mensajería
+/spec/mensajeria-signalr/
+
+# Salidas temporales de compilación/verificación de Codex
+.codex-test-output/
+.codex-test-obj/

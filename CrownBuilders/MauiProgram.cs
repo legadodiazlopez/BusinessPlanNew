@@ -47,6 +47,7 @@ namespace CrownBuilders
                 try
                 {
                     builder.Services.AddSingleton<ApiService>();
+                    builder.Services.AddSingleton<MessagingService>();
                     builder.Services.AddSingleton<SyncService>();
                     builder.Services.AddSingleton(new HttpClient
                     {

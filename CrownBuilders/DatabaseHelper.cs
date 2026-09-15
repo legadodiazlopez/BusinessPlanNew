@@ -44,6 +44,19 @@ namespace CrownBuilders
             await _db.CreateTableAsync<Asistencia>();
             await _db.CreateTableAsync<CrownBuilders.Models.Mensaje>();
 
+            string[] columnasMensaje = {
+                "ClientMessageId TEXT", "ConversacionId INTEGER", "IdRemoto INTEGER", "Pendiente BOOLEAN", "Intentos INTEGER"
+            };
+
+            foreach (var col in columnasMensaje)
+            {
+                try
+                {
+                    await _db.ExecuteAsync($"ALTER TABLE Mensaje ADD COLUMN {col};");
+                }
+                catch { }
+            }
+
             // Asegurar columnas para Trabajador
             string[] columnasTrabajador = {
                 "FotoPerfil TEXT", "Oficio TEXT", "Experiencia INTEGER",
@@ -64,6 +77,18 @@ namespace CrownBuilders
         public static HttpClient GetHttpClient()
         {
             return _httpClient;
+        }
+
+        public static void SetAuthToken(string? token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                _httpClient.DefaultRequestHeaders.Authorization = null;
+                return;
+            }
+
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         }
 
 
@@ -380,51 +405,124 @@ namespace CrownBuilders
 
         public static async Task<int> GuardarMensajeAsync(CrownBuilders.Models.Mensaje mensaje)
         {
+            return await GuardarMensajeLocalAsync(mensaje).ConfigureAwait(false);
+        }
+
+        public static async Task<int> EncolarMensajeAsync(CrownBuilders.Models.Mensaje mensaje)
+        {
+            mensaje.Pendiente = true;
+            return await GuardarMensajeLocalAsync(mensaje).ConfigureAwait(false);
+        }
+
+        public static async Task<int> GuardarMensajeLocalAsync(CrownBuilders.Models.Mensaje mensaje)
+        {
+            ArgumentNullException.ThrowIfNull(mensaje);
             await InitAsync().ConfigureAwait(false);
-            var localId = await _db.InsertAsync(mensaje).ConfigureAwait(false);
 
-            // Sincronizar con la API de Azure (fuente de verdad)
-            try
+            if (string.IsNullOrWhiteSpace(mensaje.ClientMessageId))
             {
-                var mensajeApi = new
-                {
-                    TrabajadorId = mensaje.TrabajadorId,
-                    CompaniaId = mensaje.CompaniaId,
-                    Remitente = mensaje.Remitente,
-                    Texto = mensaje.Texto,
-                    FechaEnvio = mensaje.FechaEnvio
-                };
-
-                using var client = new HttpClient();
-                client.BaseAddress = new Uri(_apiBaseUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
-                var response = await client.PostAsJsonAsync("mensajes/guardar", mensajeApi, cts.Token).ConfigureAwait(false);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[MENSAJES] ✅ Mensaje sincronizado con API: True (ID: {localId})");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"[MENSAJES] ⚠️ Error de sincronización: Status {response.StatusCode}");
-                }
-            }
-            catch (TaskCanceledException)
-            {
-                System.Diagnostics.Debug.WriteLine("[MENSAJES] ⚠️ Timeout al sincronizar mensaje con API");
-            }
-            catch (HttpRequestException ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[MENSAJES] ⚠️ Error de red al sincronizar: {ex.Message}");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[MENSAJES] ❌ Error de sincronización: {ex.Message}");
+                mensaje.ClientMessageId = Guid.NewGuid().ToString("D");
             }
 
-            return localId;
+            var existing = await _db.Table<CrownBuilders.Models.Mensaje>()
+                .Where(item => item.ClientMessageId == mensaje.ClientMessageId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (existing is not null)
+            {
+                mensaje.Id = existing.Id;
+                return await _db.UpdateAsync(mensaje).ConfigureAwait(false);
+            }
+
+            return await _db.InsertAsync(mensaje).ConfigureAwait(false);
+        }
+
+        public static async Task MarcarMensajeSincronizadoAsync(
+            string clientMessageId,
+            int remoteMessageId,
+            int conversationId)
+        {
+            await InitAsync().ConfigureAwait(false);
+            var local = await _db.Table<CrownBuilders.Models.Mensaje>()
+                .Where(item => item.ClientMessageId == clientMessageId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (local is null)
+            {
+                return;
+            }
+
+            local.IdRemoto = remoteMessageId;
+            local.ConversacionId = conversationId;
+            local.Pendiente = false;
+            local.Intentos = 0;
+            await _db.UpdateAsync(local).ConfigureAwait(false);
+        }
+
+        public static async Task RegistrarFalloMensajeAsync(string clientMessageId)
+        {
+            await InitAsync().ConfigureAwait(false);
+            var local = await _db.Table<CrownBuilders.Models.Mensaje>()
+                .Where(item => item.ClientMessageId == clientMessageId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (local is null)
+            {
+                return;
+            }
+
+            local.Intentos++;
+            await _db.UpdateAsync(local).ConfigureAwait(false);
+        }
+
+        public static async Task<List<CrownBuilders.Models.Mensaje>> ObtenerMensajesPendientesAsync(
+            int conversationId,
+            int maximo = 20)
+        {
+            await InitAsync().ConfigureAwait(false);
+            return await _db.Table<CrownBuilders.Models.Mensaje>()
+                .Where(item => item.ConversacionId == conversationId && item.Pendiente)
+                .OrderBy(item => item.FechaEnvio)
+                .Take(maximo)
+                .ToListAsync()
+                .ConfigureAwait(false);
+        }
+
+        public static async Task GuardarMensajeRemotoAsync(MensajeApiResponse mensaje)
+        {
+            ArgumentNullException.ThrowIfNull(mensaje);
+            await InitAsync().ConfigureAwait(false);
+
+            var local = await _db.Table<CrownBuilders.Models.Mensaje>()
+                .Where(item => item.ClientMessageId == mensaje.ClientMessageId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            var entity = new CrownBuilders.Models.Mensaje
+            {
+                Id = local?.Id ?? 0,
+                IdRemoto = mensaje.Id,
+                ClientMessageId = mensaje.ClientMessageId,
+                ConversacionId = mensaje.ConversationId,
+                TrabajadorId = mensaje.WorkerId,
+                CompaniaId = mensaje.CompanyId,
+                Remitente = mensaje.Sender,
+                Texto = mensaje.Text,
+                FechaEnvio = mensaje.SentAtUtc,
+                Pendiente = false
+            };
+
+            if (local is null)
+            {
+                await _db.InsertAsync(entity).ConfigureAwait(false);
+            }
+            else
+            {
+                await _db.UpdateAsync(entity).ConfigureAwait(false);
+            }
         }
 
         public static async Task<List<CrownBuilders.Models.Mensaje>> ObtenerHistorialAsync(int trabajadorId, int companiaId)
@@ -449,7 +547,7 @@ namespace CrownBuilders
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    var mensajesApi = await response.Content.ReadFromJsonAsync<List<CrownBuilders.Models.Mensaje>>().ConfigureAwait(false);
+                    var mensajesApi = await response.Content.ReadFromJsonAsync<List<MensajeApiResponse>>().ConfigureAwait(false);
                     System.Diagnostics.Debug.WriteLine($"[MENSAJES] Mensajes recibidos de API: {mensajesApi?.Count ?? 0}");
                     
                     if (mensajesApi != null && mensajesApi.Count > 0)
@@ -457,15 +555,7 @@ namespace CrownBuilders
                         // Sincronizar con la base de datos local
                         foreach (var msgApi in mensajesApi)
                         {
-                            var msgLocal = new CrownBuilders.Models.Mensaje
-                            {
-                                TrabajadorId = msgApi.TrabajadorId,
-                                CompaniaId = msgApi.CompaniaId,
-                                Remitente = msgApi.Remitente,
-                                Texto = msgApi.Texto,
-                                FechaEnvio = msgApi.FechaEnvio
-                            };
-                            await _db.InsertOrReplaceAsync(msgLocal).ConfigureAwait(false);
+                            await GuardarMensajeRemotoAsync(msgApi).ConfigureAwait(false);
                         }
                         System.Diagnostics.Debug.WriteLine($"[MENSAJES] Sincronizados {mensajesApi.Count} mensajes a DB local");
                     }
@@ -558,6 +648,18 @@ namespace CrownBuilders
 
     public class Garantia { [PrimaryKey, AutoIncrement] public int Id { get; set; } public string Descripcion { get; set; } public bool SincronizadoNube { get; set; } = false; }
     public class Asistencia { [PrimaryKey, AutoIncrement] public int Id { get; set; } public string Fecha { get; set; } }
+
+    public sealed class MensajeApiResponse
+    {
+        public int Id { get; set; }
+        public int ConversationId { get; set; }
+        public int WorkerId { get; set; }
+        public int CompanyId { get; set; }
+        public string ClientMessageId { get; set; } = string.Empty;
+        public string Sender { get; set; } = string.Empty;
+        public string Text { get; set; } = string.Empty;
+        public DateTime SentAtUtc { get; set; }
+    }
 
     public class GarantiaInasistencia
     {

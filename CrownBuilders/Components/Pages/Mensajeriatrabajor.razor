@@ -1,13 +1,14 @@
 @page "/mensajeria-trabajador"
 @page "/mensajeria-trabajador/{NombreCompaniaRoute}"
 @page "/mensajeria-trabajador/{NombreCompaniaRoute}/{CompaniaIdRoute}"
-@using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.Extensions.Logging
 @using System.Net.Http.Json
 @implements IAsyncDisposable
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ILogger<Mensajeriatrabajor> Logger
+@inject CrownBuilders.Services.ApiService ApiService
+@inject CrownBuilders.Services.MessagingService MessagingService
 
 <div class="container-fluid d-flex flex-column" style="height: 100vh; background-color: #f8f9fa;">
     <!-- ENCABEZADO CON BOTONES DE VOLVER, RESEÑA Y REPORTAR UNIFICADOS -->
@@ -106,7 +107,6 @@
 @code {
     [Parameter] public string? NombreCompaniaRoute { get; set; }
     [Parameter] public string? CompaniaIdRoute { get; set; }
-    private HubConnection? hubConnection;
     private List<MensajeUI> messages = new List<MensajeUI>();
     private string? mensajeNuevo;
     
@@ -120,6 +120,7 @@
     private string? comentarioResena;
     private int trabajadorIdActual = 1;
     private int companiaIdSimulada = 1;
+    private int conversationId;
 
     // Cliente estático para reseñas (evita agotar sockets como en la compañía)
     private static readonly HttpClient _httpClientResenas = new HttpClient(new HttpClientHandler
@@ -135,6 +136,7 @@
 
     public class MensajeUI
     {
+        public string ClientMessageId { get; set; } = "";
         public string Remitente { get; set; } = "";
         public string Texto { get; set; } = "";
         public bool EsMio { get; set; }
@@ -171,6 +173,19 @@
 
         try
         {
+            var conversation = await ApiService.EnsureConversationAsync(
+                trabajadorIdActual,
+                companiaIdSimulada);
+            conversationId = conversation?.Id ?? 0;
+            MessagingService.MessageReceived += OnMessageReceivedAsync;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "No se pudo preparar la conversación de mensajería.");
+        }
+
+        try
+        {
             System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Cargando historial: TrabajadorID={trabajadorIdActual}, CompaniaID={companiaIdSimulada}");
             
             // Mismo orden que en compañía: primero base local para carga inmediata
@@ -188,6 +203,7 @@
 
                     messages.Add(new MensajeUI
                     {
+                        ClientMessageId = msj.ClientMessageId,
                         Remitente = remitenteNombre,
                         Texto = msj.Texto ?? "",
                         EsMio = esMio
@@ -202,93 +218,48 @@
             messages.Add(new MensajeUI { Remitente = "Sistema", Texto = "Modo sin conexión cargado.", EsMio = false });
         }
 
-        var httpClientHandler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-        };
 
-        hubConnection = new HubConnectionBuilder()
-           // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/chathub
-           // Desarrollo local:
-           .WithUrl(ApiEndpoints.SignalRHubUrl, options =>
-            {
-                options.HttpMessageHandlerFactory = _ => httpClientHandler;
-                options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
-                options.SkipNegotiation = false;
-                options.Cookies = new System.Net.CookieContainer();
-            })
-            .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(60) })
-            .WithServerTimeout(TimeSpan.FromSeconds(30))
-            .Build();
-
-        hubConnection.Closed += async (error) =>
-        {
-            Logger?.LogWarning($"[SIGNALR] Conexión cerrada: {error?.Message}");
-            await Task.CompletedTask.ConfigureAwait(false);
-        };
-
-        hubConnection.Reconnecting += async (error) =>
-        {
-            Logger?.LogInformation($"[SIGNALR] Reconectando... Error: {error?.Message}");
-            await Task.CompletedTask.ConfigureAwait(false);
-        };
-
-        hubConnection.Reconnected += async (connectionId) =>
-        {
-            Logger?.LogInformation($"[SIGNALR] Reconectado exitosamente. ConnectionId: {connectionId}");
-            // ID de grupo EXACTAMENTE IGUAL para ambos
-            string grupoId = $"trabajador-{trabajadorIdActual}-compania-{companiaIdSimulada}";
-            await hubConnection.SendAsync("UnirseAConversacion", grupoId).ConfigureAwait(false);
-        };
-
-        hubConnection.On<string, string>("ReceiveMessage", async (u, m) =>
-        {
-            // Ignorar los mensajes propios del trabajador para no duplicar en UI
-            if (string.Equals(u, "trabajador", StringComparison.OrdinalIgnoreCase)) return;
-
-            try
-            {
-                var msjRecibido = new CrownBuilders.Models.Mensaje { TrabajadorId = trabajadorIdActual, CompaniaId = companiaIdSimulada, Remitente = u, Texto = m, FechaEnvio = DateTime.Now };
-                await DatabaseHelper.GuardarMensajeAsync(msjRecibido).ConfigureAwait(false);
-            }
-            catch { }
-
-            await InvokeAsync(() =>
-            {
-                messages.Add(new MensajeUI { Remitente = string.IsNullOrWhiteSpace(u) ? nombreCompania : u, Texto = m, EsMio = false });
-                StateHasChanged();
-            });
-        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && conversationId > 0)
         {
-            _ = Task.Run(async () => await ConectarAlServidorSilencioso());
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await MessagingService.StartAsync(conversationId);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "No se pudo conectar al servidor de mensajería.");
+                }
+            });
         }
     }
 
-    private async Task ConectarAlServidorSilencioso()
+    private async Task OnMessageReceivedAsync(MensajeApiResponse message)
     {
-        try
-        {
-            if (hubConnection?.State == HubConnectionState.Disconnected)
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                await hubConnection.StartAsync(cts.Token).ConfigureAwait(false);
+        await DatabaseHelper.GuardarMensajeRemotoAsync(message).ConfigureAwait(false);
 
-                if (hubConnection.State == HubConnectionState.Connected)
-                {
-                    string grupoId = $"trabajador-{trabajadorIdActual}-compania-{companiaIdSimulada}";
-                    await hubConnection.SendAsync("UnirseAConversacion", grupoId).ConfigureAwait(false);
-                }
-            }
-        }
-        catch (Exception ex)
+        await InvokeAsync(() =>
         {
-            Logger?.LogError($"[CHAT] Error conectando SignalR: {ex.Message}");
-        }
+            if (messages.Any(item => item.ClientMessageId == message.ClientMessageId))
+            {
+                return;
+            }
+
+            var esMio = string.Equals(message.Sender, "trabajador", StringComparison.OrdinalIgnoreCase);
+            messages.Add(new MensajeUI
+            {
+                ClientMessageId = message.ClientMessageId,
+                Remitente = esMio ? "Tú" : (string.IsNullOrWhiteSpace(message.Sender) ? nombreCompania : message.Sender),
+                Texto = message.Text,
+                EsMio = esMio
+            });
+            StateHasChanged();
+        });
     }
     
     private void Volver() => Navigation.NavigateTo("/companias-disponibles");
@@ -344,12 +315,33 @@
         {
             var textoAEnviar = mensajeNuevo;
             mensajeNuevo = string.Empty;
+            var clientMessageId = Guid.NewGuid().ToString("D");
 
             try
             {
-                // Se guarda localmente como "trabajador"
-                var msjEnviado = new CrownBuilders.Models.Mensaje { TrabajadorId = trabajadorIdActual, CompaniaId = companiaIdSimulada, Remitente = "trabajador", Texto = textoAEnviar, FechaEnvio = DateTime.Now };
-                await DatabaseHelper.GuardarMensajeAsync(msjEnviado).ConfigureAwait(false);
+                var msjEnviado = new CrownBuilders.Models.Mensaje
+                {
+                    ClientMessageId = clientMessageId,
+                    ConversacionId = conversationId,
+                    TrabajadorId = trabajadorIdActual,
+                    CompaniaId = companiaIdSimulada,
+                    Remitente = "trabajador",
+                    Texto = textoAEnviar,
+                    FechaEnvio = DateTime.UtcNow
+                };
+                await DatabaseHelper.EncolarMensajeAsync(msjEnviado).ConfigureAwait(false);
+
+                if (conversationId > 0)
+                {
+                    var response = await MessagingService.SendAsync(
+                        conversationId,
+                        Guid.Parse(clientMessageId),
+                        textoAEnviar).ConfigureAwait(false);
+                    await DatabaseHelper.MarcarMensajeSincronizadoAsync(
+                        clientMessageId,
+                        response.Id,
+                        response.ConversationId).ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
@@ -358,37 +350,14 @@
 
             await InvokeAsync(() =>
             {
-                messages.Add(new MensajeUI { Remitente = "Tú", Texto = textoAEnviar, EsMio = true });
+                messages.Add(new MensajeUI
+                {
+                    ClientMessageId = clientMessageId,
+                    Remitente = "Tú",
+                    Texto = textoAEnviar,
+                    EsMio = true
+                });
                 StateHasChanged();
-            });
-
-            string grupoId = $"trabajador-{trabajadorIdActual}-compania-{companiaIdSimulada}";
-            
-            // Envío en segundo plano
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    if (hubConnection?.State == HubConnectionState.Connected)
-                    {
-                        // Se identifica en Azure como "trabajador"
-                        await hubConnection.SendAsync("EnviarMensajePrivado", grupoId, "trabajador", textoAEnviar).ConfigureAwait(false);
-                    }
-                    else if (hubConnection != null)
-                    {
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                        await hubConnection.StartAsync(cts.Token);
-                        if (hubConnection.State == HubConnectionState.Connected)
-                        {
-                            await hubConnection.SendAsync("UnirseAConversacion", grupoId);
-                            await hubConnection.SendAsync("EnviarMensajePrivado", grupoId, "trabajador", textoAEnviar);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger?.LogError($"[CHAT] Error enviando via SignalR: {ex.Message}");
-                }
             });
         }
     }
@@ -403,10 +372,7 @@
 
     public async ValueTask DisposeAsync()
     {
-        if (hubConnection is not null)
-        {
-            await hubConnection.StopAsync();
-            await hubConnection.DisposeAsync();
-        }
+        MessagingService.MessageReceived -= OnMessageReceivedAsync;
+        await Task.CompletedTask;
     }
 }
