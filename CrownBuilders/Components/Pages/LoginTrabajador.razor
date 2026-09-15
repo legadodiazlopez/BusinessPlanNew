@@ -1,6 +1,6 @@
 @page "/login-trabajador"
 @using CrownBuilders.Services
-@using CrownBuilders // Aseguramos el namespace del modelo Trabajador
+@using CrownBuilders
 @inject NavigationManager Navigation
 @inject ApiService ApiService
 
@@ -12,7 +12,13 @@
     .border-gold { border-color: var(--gold); }
 </style>
 
-<div class="container mt-5">
+<div class="container mt-4">
+    <div class="mb-3">
+        <button @onclick="VolverAlHome" class="btn btn-outline-dark btn-sm" style="border-radius: 8px;" disabled="@cargando">
+            <i class="oi oi-arrow-left"></i> Volver
+        </button>
+    </div>
+
     <div class="row justify-content-center">
         <div class="col-md-6 col-lg-4">
             <div class="card p-4 shadow-sm" style="border-radius: 15px;">
@@ -86,6 +92,8 @@
     private string password = "";
     private string mensajeError = "";
     private bool cargando = false;
+
+    private void VolverAlHome() => Navigation.NavigateTo("/");
 
     private async Task HandleLogin()
     {

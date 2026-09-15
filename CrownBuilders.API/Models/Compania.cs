@@ -3,7 +3,7 @@
     public class Compania
     {
         public int Id { get; set; }
-        public string FotoPerfil { get; set; }
+        public string? FotoPerfil { get; set; }
         public string NombreEmpresa { get; set; }
         public string Especialidad { get; set; }
         public string Ciudad { get; set; }
