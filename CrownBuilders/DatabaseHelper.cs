@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System;
 using System.Linq;
 using System.Threading;
+using CrownBuilders.Services;
 
 namespace CrownBuilders
 {
@@ -14,8 +15,10 @@ namespace CrownBuilders
     {
         private static SQLiteAsyncConnection _db;
 
-        // El orden es importante: primero la URL, luego el HttpClient que la usa
-        private static readonly string _apiBaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
+        // Producción/Azure:
+        // private static readonly string _apiBaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
+        // Desarrollo local:
+        private static readonly string _apiBaseUrl = ApiEndpoints.ApiBaseUrl;
 
         // UN SOLO CLIENTE ESTÁTICO PARA TODA LA APP (Evita colapso de conexiones y salta errores SSL en emulador)
         private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler

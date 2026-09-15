@@ -154,7 +154,7 @@ namespace CrownBuilders.Tests
             // Assert - Verificar aislamiento correcto
             Assert.Equal("compania-1-trabajador-2", grupo1);
             Assert.Equal("compania-3-trabajador-4", grupo2);
-            Assert.NotEqual(grupo1, grupo2, "Los grupos deben ser diferentes para asegurar aislamiento");
+            Assert.NotEqual(grupo1, grupo2);
         }
     }
 }

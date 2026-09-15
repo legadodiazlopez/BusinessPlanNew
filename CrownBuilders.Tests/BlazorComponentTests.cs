@@ -1,7 +1,7 @@
 using Xunit;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
-using CrownBuilders.Components.Pages.CompaniasDisponibles;
+using static CrownBuilders.Components.Pages.CompaniasDisponibles;
 using System.Collections.Generic;
 
 namespace CrownBuilders.Tests

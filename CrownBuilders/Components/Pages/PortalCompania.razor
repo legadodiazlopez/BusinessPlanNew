@@ -146,7 +146,9 @@
         ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
     })
     {
-        BaseAddress = new Uri("https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/"),
+        // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/
+        // Desarrollo local:
+        BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl),
         Timeout = TimeSpan.FromSeconds(15)
     };
 

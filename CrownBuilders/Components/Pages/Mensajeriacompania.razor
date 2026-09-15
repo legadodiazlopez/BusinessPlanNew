@@ -118,7 +118,9 @@
 
         // URL CORREGIDA: Incluye /api/chathub exactamente igual que en el código del trabajador
         hubConnection = new HubConnectionBuilder()
-           .WithUrl("https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/chathub", options =>
+           // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/chathub
+           // Desarrollo local:
+           .WithUrl(ApiEndpoints.SignalRHubUrl, options =>
             {
                 options.HttpMessageHandlerFactory = _ => httpClientHandler;
                 options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;

@@ -2,7 +2,7 @@ using Xunit;
 using Moq;
 using SQLitePCL;
 using CrownBuilders;
-using CrownBuilders.Components.Pages.CompaniasDisponibles;
+using static CrownBuilders.Components.Pages.CompaniasDisponibles;
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;

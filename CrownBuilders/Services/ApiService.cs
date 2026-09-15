@@ -13,8 +13,10 @@ namespace CrownBuilders.Services
         private readonly HttpClient _httpClient;
         private string? _authToken;
 
-        // --- CONEXIÓN DIRECTA Y PERMANENTE A AZURE EN LA NUBE ---
-        private const string BaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
+        // Producción/Azure:
+        // private const string BaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
+        // Desarrollo local:
+        private const string BaseUrl = ApiEndpoints.ApiBaseUrl;
 
         public ApiService()
         {

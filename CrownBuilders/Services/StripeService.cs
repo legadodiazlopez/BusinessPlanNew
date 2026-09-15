@@ -34,7 +34,7 @@ namespace CrownBuilders.Services
                 };
 
                 // Realiza la petición POST al controlador de la API
-                var response = await _httpClient.PostAsJsonAsync("api/stripe/create-subscription", requestData);
+                var response = await _httpClient.PostAsJsonAsync("stripe/create-subscription", requestData);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -64,7 +64,7 @@ namespace CrownBuilders.Services
             {
                 var requestData = new { EmailCompania = emailCompania };
 
-                var response = await _httpClient.PostAsJsonAsync("api/stripe/aplicar-garantia", requestData);
+                var response = await _httpClient.PostAsJsonAsync("stripe/aplicar-garantia", requestData);
 
                 if (response.IsSuccessStatusCode)
                 {

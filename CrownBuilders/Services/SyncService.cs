@@ -11,7 +11,9 @@ namespace CrownBuilders.Services
         // Instancia estática compartida para reutilizar sockets y evitar saturar el sistema
         private static readonly HttpClient _httpClient = new HttpClient
         {
-            BaseAddress = new Uri("https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/"),
+            // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/
+            // Desarrollo local:
+            BaseAddress = new Uri(ApiEndpoints.ServerBaseUrl),
             Timeout = TimeSpan.FromSeconds(8) // Reducido a 8s para que si Azure no responde, pase a caché local de inmediato
         };
 

@@ -5,6 +5,12 @@ using CrownBuilders.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Logging.ClearProviders();
+    builder.Logging.AddConsole();
+}
+
 // --- CONFIGURACIÓN DE BASE DE DATOS ---
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Server=(localdb)\\mssqllocaldb;Database=CrownBuildersDB;Trusted_Connection=True;";
@@ -42,13 +48,31 @@ builder.Services.AddSingleton<FirebaseNotificationService>();
 
 var app = builder.Build();
 
+// Crear o actualizar la base local al iniciar la API en desarrollo.
+if (app.Environment.IsDevelopment())
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "No se pudo preparar LocalDB. La API se iniciará, pero los endpoints que usan base de datos no estarán disponibles.");
+    }
+}
+
 // --- PIPELINE DE PETICIONES ---
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // --- ACTIVAMOS CORS ---
 app.UseCors("PermitirTodo");

@@ -3,6 +3,7 @@ using CrownBuilders.Services;
 using CrownBuilders.Diagnostics;
 using Microsoft.AspNetCore.SignalR.Client;
 using System.Reflection;
+using System.Net.Http;
 
 namespace CrownBuilders
 {
@@ -47,6 +48,13 @@ namespace CrownBuilders
                 {
                     builder.Services.AddSingleton<ApiService>();
                     builder.Services.AddSingleton<SyncService>();
+                    builder.Services.AddSingleton(new HttpClient
+                    {
+                        // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/
+                        // Desarrollo local:
+                        BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl),
+                        Timeout = TimeSpan.FromSeconds(30)
+                    });
                     builder.Services.AddSingleton<StripeService>();
                 }
                 catch (System.Exception ex)

@@ -7,7 +7,10 @@ namespace CrownBuilders.Services
     public class PushNotificationHandler
     {
         private static readonly HttpClient _httpClient = new HttpClient();
-        private static readonly string _apiBaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api";
+        // Producción/Azure:
+        // private static readonly string _apiBaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api";
+        // Desarrollo local:
+        private static readonly string _apiBaseUrl = ApiEndpoints.ApiBaseUrl.TrimEnd('/');
 
         /// <summary>
         /// Envía el FCM Token del usuario logueado hacia la API de Azure

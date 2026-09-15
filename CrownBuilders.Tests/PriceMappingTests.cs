@@ -1,5 +1,5 @@
 using Xunit;
-using CrownBuilders.Components.Pages.CompaniasDisponibles;
+using CompaniaViewModel = CrownBuilders.Components.Pages.CompaniasDisponibles.Compania;
 using CrownBuilders.API.Models;
 using System;
 using System.Collections.Generic;
@@ -34,7 +34,7 @@ namespace CrownBuilders.Tests
             };
 
             // Act - Simular el mapeo que hace DatabaseHelper.ObtenerCompaniasAsync()
-            var companiaDTO = new Compania
+            var companiaDTO = new CompaniaViewModel
             {
                 Id = companiaApi.Id,
                 Nombre = companiaApi.NombreEmpresa,
@@ -78,7 +78,7 @@ namespace CrownBuilders.Tests
             };
 
             // Act
-            var companiaDTO = new Compania
+            var companiaDTO = new CompaniaViewModel
             {
                 Id = companiaApi.Id,
                 Nombre = companiaApi.NombreEmpresa,
@@ -129,7 +129,7 @@ namespace CrownBuilders.Tests
             };
 
             // Act - Simular el mapeo completo que hace DatabaseHelper
-            var companiasDTO = companiasApi.Select(c => new Compania
+            var companiasDTO = companiasApi.Select(c => new CompaniaViewModel
             {
                 Id = c.Id,
                 Nombre = c.NombreEmpresa,
@@ -155,7 +155,7 @@ namespace CrownBuilders.Tests
         public void RenderizadoBlazor_FormatoPrecio_Correcto()
         {
             // Arrange
-            var compania = new Compania
+            var compania = new CompaniaViewModel
             {
                 Id = 1,
                 Nombre = "Constructora Test",
