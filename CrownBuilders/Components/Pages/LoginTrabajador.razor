@@ -124,21 +124,7 @@
                         var trabajadorDesdeAzure = await ApiService.ObtenerTrabajadorAsync(authResponse.Id);
                         if (trabajadorDesdeAzure != null)
                         {
-                            var trabajadorLocal = new CrownBuilders.Trabajador
-                            {
-                                Id = trabajadorDesdeAzure.Id,
-                                Nombre = trabajadorDesdeAzure.Nombre,
-                                Oficio = trabajadorDesdeAzure.Oficio,
-                                Ciudad = trabajadorDesdeAzure.Ciudad,
-                                Experiencia = trabajadorDesdeAzure.Experiencia,
-                                Correo = trabajadorDesdeAzure.Correo,
-                                Telefono = trabajadorDesdeAzure.Telefono,
-                                Password = trabajadorDesdeAzure.Password,
-                                TieneVehiculo = trabajadorDesdeAzure.TieneVehiculo,
-                                TieneHerramientas = trabajadorDesdeAzure.TieneHerramientas,
-                                EstaDisponible = trabajadorDesdeAzure.EstaDisponible
-                            };
-                            await DatabaseHelper.GuardarTrabajadorAsync(trabajadorLocal);
+                            await DatabaseHelper.GuardarTrabajadorAsync(trabajadorDesdeAzure);
                         }
                     }
                     catch (Exception ex)

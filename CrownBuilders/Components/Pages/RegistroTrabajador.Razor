@@ -304,6 +304,21 @@
                 {
                     System.Diagnostics.Debug.WriteLine($"Error en base local SQLite: {dbEx.Message}");
                 }
+
+                var sesionNueva = await ApiService.LoginTrabajadorAsync(
+                    nuevoTrabajador.Correo,
+                    nuevoTrabajador.Password);
+
+                if (sesionNueva?.Exitoso != true
+                    || string.IsNullOrWhiteSpace(sesionNueva.Token)
+                    || sesionNueva.Id != resultadoAPI.Id)
+                {
+                    mensajeError = "La cuenta se creó, pero no se pudo iniciar sesión automáticamente. Inicia sesión con la nueva cuenta.";
+                    mostrandoVerificacion = false;
+                    cargando = false;
+                    Navigation.NavigateTo("/login-trabajador");
+                    return;
+                }
                 
                 mostrandoVerificacion = false;
                 cargando = false;

@@ -487,11 +487,11 @@ namespace CrownBuilders.Services
 
         // --- OBTENER DATOS ---
 
-        public async Task<Trabajador?> ObtenerTrabajadorAsync(int id)
+        public async Task<CrownBuilders.Models.Trabajador?> ObtenerTrabajadorAsync(int id)
         {
             try
             {
-                return await _httpClient.GetFromJsonAsync<Trabajador>($"Perfil/trabajador/{id}");
+                return await _httpClient.GetFromJsonAsync<CrownBuilders.Models.Trabajador>($"Perfil/trabajador/{id}");
             }
             catch (Exception ex)
             {
@@ -513,16 +513,16 @@ namespace CrownBuilders.Services
             }
         }
 
-        public async Task<List<Trabajador>?> ObtenerTrabajadoresAsync()
+        public async Task<List<CrownBuilders.Models.Trabajador>?> ObtenerTrabajadoresAsync()
         {
             try
             {
-                return await _httpClient.GetFromJsonAsync<List<Trabajador>>("Perfil/listar-trabajadores");
+                return await _httpClient.GetFromJsonAsync<List<CrownBuilders.Models.Trabajador>>("Perfil/listar-trabajadores");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ERROR DETALLADO LISTAR TRABAJADORES]: {ex.InnerException?.Message ?? ex.Message}");
-                return new List<Trabajador>();
+                return new List<CrownBuilders.Models.Trabajador>();
             }
         }
 
@@ -541,12 +541,19 @@ namespace CrownBuilders.Services
 
         // --- ACTUALIZAR DATOS ---
 
-        public async Task<bool> ActualizarTrabajadorAsync(Trabajador trabajador)
+        public async Task<bool> ActualizarTrabajadorAsync(CrownBuilders.Models.Trabajador trabajador)
         {
             try
             {
-                var response = await _httpClient.PutAsJsonAsync($"Auth/actualizar-trabajador/{trabajador.Id}", trabajador);
-                return response.IsSuccessStatusCode;
+                await RestoreAuthTokenAsync();
+                using var response = await _httpClient.PutAsJsonAsync($"Auth/actualizar-trabajador/{trabajador.Id}", trabajador);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return false;
+                }
+
+                var resultado = await response.Content.ReadFromJsonAsync<ResultadoActualizacion>();
+                return resultado?.Exitoso == true;
             }
             catch (Exception ex)
             {
@@ -589,6 +596,11 @@ namespace CrownBuilders.Services
         public string Mensaje { get; set; }
         public int Id { get; set; }
         public string Correo { get; set; }
+    }
+
+    public sealed class ResultadoActualizacion
+    {
+        public bool Exitoso { get; set; }
     }
 
     public class VerificarCorreoResponse

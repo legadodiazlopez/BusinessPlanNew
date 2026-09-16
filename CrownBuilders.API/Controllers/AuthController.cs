@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using Microsoft.EntityFrameworkCore;
 using CrownBuilders.API.Services;
+using System.Security.Claims;
 
 namespace CrownBuilders.API.Controllers
 {
@@ -211,11 +213,19 @@ namespace CrownBuilders.API.Controllers
         }
 
         // --- ACTUALIZAR PERFIL TRABAJADOR ---
+        [Authorize(Roles = "trabajador")]
         [HttpPut("actualizar-trabajador/{id}")]
         public async Task<IActionResult> ActualizarTrabajador(int id, [FromBody] Trabajador trabajador)
         {
             try
             {
+                var usuarioAutenticado = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(usuarioAutenticado, out var trabajadorAutenticadoId) ||
+                    trabajadorAutenticadoId != id)
+                {
+                    return Forbid();
+                }
+
                 if (id != trabajador.Id)
                 {
                     return Ok(new { exitoso = false, mensaje = "ID mismatch" });

@@ -12,6 +12,7 @@ public sealed class MessagingService : IAsyncDisposable
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private HubConnection? _hubConnection;
     private int? _conversationId;
+    private string? _connectionAuthToken;
 
     public MessagingService(ApiService apiService)
     {
@@ -36,10 +37,19 @@ public sealed class MessagingService : IAsyncDisposable
             throw new InvalidOperationException("La sesión no está autenticada. Inicia sesión nuevamente.");
         }
 
+        var currentAuthToken = _apiService.AuthToken;
+
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            if (_hubConnection is not null &&
+                !string.Equals(_connectionAuthToken, currentAuthToken, StringComparison.Ordinal))
+            {
+                await StopConnectionAsync().ConfigureAwait(false);
+            }
+
             _hubConnection ??= CreateConnection();
+            _connectionAuthToken = currentAuthToken;
 
             if (_hubConnection.State == HubConnectionState.Disconnected)
             {
@@ -67,6 +77,32 @@ public sealed class MessagingService : IAsyncDisposable
         finally
         {
             _connectionLock.Release();
+        }
+    }
+
+    public async Task StopAsync()
+    {
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await StopConnectionAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
+    private async Task StopConnectionAsync()
+    {
+        var connection = _hubConnection;
+        _hubConnection = null;
+        _connectionAuthToken = null;
+        _conversationId = null;
+
+        if (connection is not null)
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -275,11 +311,7 @@ public sealed class MessagingService : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if (_hubConnection is not null)
-        {
-            await _hubConnection.DisposeAsync().ConfigureAwait(false);
-        }
-
+        await StopAsync().ConfigureAwait(false);
         _connectionLock.Dispose();
     }
 }

@@ -24,18 +24,48 @@ public sealed class CompanyProfileIdentityTests
         Assert.DoesNotContain("ObtenerPerfilCompaniaAsync()", editProfile);
     }
 
+    [Fact]
+    public void WorkerProfileScreens_UseTheAuthenticatedWorkerId()
+    {
+        var editProfile = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Components", "Pages", "EditarPerfilTrabajador.razor")));
+        var registration = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Components", "Pages", "RegistroTrabajador.Razor")));
+        var databaseHelper = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "DatabaseHelper.cs")));
+
+        Assert.Contains("await ApiService.RestoreAuthTokenAsync();", editProfile);
+        Assert.Contains("ApiService.AuthenticatedUserId ?? 0", editProfile);
+        Assert.Contains("ObtenerTrabajadorPorIdAsync(trabajadorIdActual)", editProfile);
+        Assert.Contains("await ApiService.LoginTrabajadorAsync(", registration);
+        Assert.Contains("Where(t => t.Id == trabajadorId)", databaseHelper);
+        Assert.DoesNotContain("ObtenerTrabajadoresAsync()", editProfile);
+        Assert.DoesNotContain("trabajador = lista[0]", editProfile);
+    }
+
     private static string FindWorkspaceFile(string relativePath)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
+        var roots = new[]
         {
-            var candidate = Path.Combine(directory.FullName, relativePath);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
+            Environment.GetEnvironmentVariable("CROWN_BUILDERS_WORKSPACE"),
+            AppContext.BaseDirectory,
+            Directory.GetCurrentDirectory()
+        }.Where(root => !string.IsNullOrWhiteSpace(root))
+         .Select(root => root!);
 
-            directory = directory.Parent;
+        foreach (var root in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var directory = new DirectoryInfo(root);
+            while (directory is not null)
+            {
+                var candidate = Path.Combine(directory.FullName, relativePath);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+
+                directory = directory.Parent;
+            }
         }
 
         throw new FileNotFoundException($"No se encontró {relativePath}.");

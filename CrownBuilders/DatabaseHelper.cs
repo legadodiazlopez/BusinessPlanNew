@@ -131,10 +131,12 @@ namespace CrownBuilders
             var trabajadorDB = new CrownBuilders.Trabajador
             {
                 Id = trabajadorUI.Id,
+                FotoPerfil = trabajadorUI.FotoPerfil,
                 Nombre = trabajadorUI.Nombre,
                 Oficio = trabajadorUI.Oficio,
                 Ciudad = trabajadorUI.Ciudad,
                 Experiencia = trabajadorUI.Experiencia ?? 0,
+                Salario = trabajadorUI.Salario,
                 Correo = trabajadorUI.Correo,
                 Telefono = trabajadorUI.Telefono,
                 Password = trabajadorUI.Password,
@@ -146,6 +148,21 @@ namespace CrownBuilders
 
             await _db.InsertOrReplaceAsync(trabajadorDB);
             return true;
+        }
+
+        public static async Task<Trabajador?> ObtenerTrabajadorPorIdAsync(int trabajadorId)
+        {
+            await InitAsync().ConfigureAwait(false);
+
+            if (trabajadorId <= 0)
+            {
+                return null;
+            }
+
+            return await _db.Table<Trabajador>()
+                .Where(t => t.Id == trabajadorId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
         }
 
         public static async Task<bool> GuardarPerfilCompaniaAsync(PerfilCompania perfil)

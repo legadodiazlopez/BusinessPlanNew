@@ -84,6 +84,20 @@ public sealed class SignalRConnectionTests
     }
 
     [Fact]
+    public void SwitchingAuthenticatedAccounts_ReleasesThePreviousChatConnection()
+    {
+        var messagingService = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Services", "MessagingService.cs")));
+        var companyPortal = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Components", "Pages", "PortalCompania.razor")));
+
+        Assert.Contains("_connectionAuthToken", messagingService);
+        Assert.Contains("StopConnectionAsync", messagingService);
+        Assert.Contains("await MessagingService.StopAsync()", companyPortal);
+        Assert.Contains("await ApiService.SetAuthTokenAsync(null)", companyPortal);
+    }
+
+    [Fact]
     public void ApiDelivery_IsNotCoupledToRequestCancellation()
     {
         var controller = File.ReadAllText(FindWorkspaceFile(
@@ -97,6 +111,22 @@ public sealed class SignalRConnectionTests
 
     private static string FindProjectPath(string projectFileName)
     {
+        var configuredWorkspace = Environment.GetEnvironmentVariable("CROWN_BUILDERS_WORKSPACE");
+        if (!string.IsNullOrWhiteSpace(configuredWorkspace))
+        {
+            var configuredCandidates = new[]
+            {
+                Path.Combine(configuredWorkspace, projectFileName),
+                Path.Combine(configuredWorkspace, "CrownBuilders", projectFileName)
+            };
+
+            var configuredProjectPath = configuredCandidates.FirstOrDefault(File.Exists);
+            if (configuredProjectPath is not null)
+            {
+                return configuredProjectPath;
+            }
+        }
+
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
@@ -120,6 +150,16 @@ public sealed class SignalRConnectionTests
 
     private static string FindWorkspaceFile(string relativePath)
     {
+        var configuredWorkspace = Environment.GetEnvironmentVariable("CROWN_BUILDERS_WORKSPACE");
+        if (!string.IsNullOrWhiteSpace(configuredWorkspace))
+        {
+            var configuredPath = Path.Combine(configuredWorkspace, relativePath);
+            if (File.Exists(configuredPath))
+            {
+                return configuredPath;
+            }
+        }
+
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {

@@ -1,7 +1,10 @@
 @page "/companias-disponibles"
 @using CrownBuilders
+@using CrownBuilders.Services
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject ApiService ApiService
+@inject MessagingService MessagingService
 
 <div class="container mt-4 cb-page">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -219,7 +222,22 @@
     private void ContactarCompania(Compania compania) => Navigation.NavigateTo(ConstruirRutaMensajeria(compania));
 
     private void EditarPerfil() => Navigation.NavigateTo("/editar-perfil");
-    private void CerrarSesion() => Navigation.NavigateTo("/login-trabajador");
+    private async Task CerrarSesion()
+    {
+        try
+        {
+            await MessagingService.StopAsync();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine($"[AUTH] No se pudo cerrar el chat durante el cierre de sesión: {exception.Message}");
+        }
+        finally
+        {
+            await ApiService.SetAuthTokenAsync(null);
+            Navigation.NavigateTo("/login-trabajador");
+        }
+    }
 
     private async Task EliminarCuenta()
     {
