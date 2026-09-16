@@ -1,6 +1,5 @@
 @page "/companias-disponibles"
 @using CrownBuilders
-@using System.Net.Http.Json
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
@@ -96,18 +95,6 @@
     private CrownBuilders.Trabajador trabajador = new CrownBuilders.Trabajador();
     private List<Compania> listaCompanias = new List<Compania>();
     
-    // Instancia estática blindada (Bypass de SSL agregado para igualar a la compañía)
-    private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
-    {
-        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-    })
-    {
-        // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/
-        // Desarrollo local:
-        BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl),
-        Timeout = TimeSpan.FromSeconds(15) // Aumentado a 15s para dar margen a Azure
-    };
-
     protected override void OnInitialized()
     {
         // Ejecutar sin bloquear el ciclo de vida de Blazor.
@@ -116,67 +103,47 @@
 
     private async Task CargarDatosDinamicosAsync()
     {
-        // FASE 1: Carga Local-First concurrente (Caché)
+        Task<List<Compania>?> companiasRemotasTask = Task.FromResult<List<Compania>?>(null);
+
         try
         {
-            var trabajadoresTask = Task.Run(() => DatabaseHelper.ObtenerTrabajadoresAsync());
-            var companiasTask = Task.Run(() => DatabaseHelper.ObtenerCompaniasAsync());
-            
-            await Task.WhenAll(trabajadoresTask, companiasTask);
-            
+            // FASE 1: mostrar caché local mientras la actualización remota avanza en paralelo.
+            var trabajadoresTask = DatabaseHelper.ObtenerTrabajadoresAsync();
+            var companiasLocalesTask = DatabaseHelper.ObtenerCompaniasLocalesAsync();
+            companiasRemotasTask = DatabaseHelper.ActualizarCompaniasDesdeApiAsync();
+
+            var resultadoLocal = await companiasLocalesTask;
+            if (resultadoLocal.Any())
+            {
+                listaCompanias = resultadoLocal;
+                estaCargando = false;
+                await InvokeAsync(StateHasChanged);
+            }
+
             var trabajadores = await trabajadoresTask;
             if (trabajadores != null && trabajadores.Count > 0)
             {
                 trabajador = trabajadores[0];
             }
-
-            var resultadoDb = await companiasTask;
-            if (resultadoDb != null && resultadoDb.Any())
-            {
-                listaCompanias = resultadoDb;
-                estaCargando = false;
-                await InvokeAsync(StateHasChanged); // El usuario ya ve datos casi al instante
-            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CARGA CACHÉ] Error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[CARGA LOCAL] Error: {ex.Message}");
         }
 
-        // FASE 2: Actualización desde Azure (Nube) -> Recupera TODAS las compañías reales
         try
         {
-            System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] Obteniendo lista completa desde Azure...");
-            var response = await _httpClient.GetAsync("Perfil/listar-companias");
-            System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Respuesta Azure: {response.StatusCode}");
-            
-            if (response.IsSuccessStatusCode)
+            // FASE 2: aplicar una única respuesta remota ya sincronizada con SQLite.
+            var resultadoRemoto = await companiasRemotasTask;
+            if (resultadoRemoto != null)
             {
-                var companiasNube = await response.Content.ReadFromJsonAsync<List<CrownBuilders.Models.Compania>>();
-                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Compañías recibidas: {companiasNube?.Count ?? 0}");
-                
-                if (companiasNube != null && companiasNube.Any())
-                {
-                    // Reemplazamos la caché local con la lista fresca de la base de datos central
-                    listaCompanias = companiasNube.Select(MapearCompania).ToList();
-                    System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Lista actualizada con {companiasNube.Count} compañías");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] La respuesta de Azure está vacía o nula");
-                }
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error en respuesta Azure: {response.StatusCode}");
-                var errorContent = await response.Content.ReadAsStringAsync();
-                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error contenido: {errorContent}");
+                listaCompanias = resultadoRemoto;
+                await InvokeAsync(StateHasChanged);
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[AZURE] Error al obtener lista de la nube: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[AZURE] Stack trace: {ex.StackTrace}");
+            System.Diagnostics.Debug.WriteLine($"[ACTUALIZACIÓN REMOTA] Error: {ex.Message}");
         }
         finally
         {

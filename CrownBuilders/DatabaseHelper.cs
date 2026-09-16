@@ -14,6 +14,8 @@ namespace CrownBuilders
     public static class DatabaseHelper
     {
         private static SQLiteAsyncConnection _db;
+        private static readonly SemaphoreSlim _initializationLock = new(1, 1);
+        private static readonly TimeSpan RemoteDataTimeout = TimeSpan.FromSeconds(8);
 
         // Producción/Azure:
         // private static readonly string _apiBaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
@@ -34,43 +36,55 @@ namespace CrownBuilders
         {
             if (_db != null) return;
 
-            var dbPath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "CrownBuilders.db3");
-            _db = new SQLiteAsyncConnection(dbPath);
-
-            // Crear tablas como caché local
-            await _db.CreateTableAsync<Trabajador>();
-            await _db.CreateTableAsync<PerfilCompania>();
-            await _db.CreateTableAsync<Garantia>();
-            await _db.CreateTableAsync<Asistencia>();
-            await _db.CreateTableAsync<CrownBuilders.Models.Mensaje>();
-
-            string[] columnasMensaje = {
-                "ClientMessageId TEXT", "ConversacionId INTEGER", "IdRemoto INTEGER", "Pendiente BOOLEAN", "Intentos INTEGER"
-            };
-
-            foreach (var col in columnasMensaje)
+            await _initializationLock.WaitAsync().ConfigureAwait(false);
+            try
             {
-                try
+                if (_db != null) return;
+
+                var dbPath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "CrownBuilders.db3");
+                var db = new SQLiteAsyncConnection(dbPath);
+
+                // Crear tablas como caché local
+                await db.CreateTableAsync<Trabajador>();
+                await db.CreateTableAsync<PerfilCompania>();
+                await db.CreateTableAsync<Garantia>();
+                await db.CreateTableAsync<Asistencia>();
+                await db.CreateTableAsync<CrownBuilders.Models.Mensaje>();
+
+                string[] columnasMensaje = {
+                    "ClientMessageId TEXT", "ConversacionId INTEGER", "IdRemoto INTEGER", "Pendiente BOOLEAN", "Intentos INTEGER"
+                };
+
+                foreach (var col in columnasMensaje)
                 {
-                    await _db.ExecuteAsync($"ALTER TABLE Mensaje ADD COLUMN {col};");
+                    try
+                    {
+                        await db.ExecuteAsync($"ALTER TABLE Mensaje ADD COLUMN {col};");
+                    }
+                    catch { }
                 }
-                catch { }
+
+                // Asegurar columnas para Trabajador
+                string[] columnasTrabajador = {
+                    "FotoPerfil TEXT", "Oficio TEXT", "Experiencia INTEGER",
+                    "Ciudad TEXT", "Telefono TEXT", "TieneVehiculo BOOLEAN",
+                    "TieneHerramientas BOOLEAN", "Salario DECIMAL", "AceptaTerminos BOOLEAN", "EstaDisponible BOOLEAN", "FcmToken TEXT"
+                };
+
+                foreach (var col in columnasTrabajador)
+                {
+                    try
+                    {
+                        await db.ExecuteAsync($"ALTER TABLE Trabajador ADD COLUMN {col};");
+                    }
+                    catch { }
+                }
+
+                _db = db;
             }
-
-            // Asegurar columnas para Trabajador
-            string[] columnasTrabajador = {
-                "FotoPerfil TEXT", "Oficio TEXT", "Experiencia INTEGER",
-                "Ciudad TEXT", "Telefono TEXT", "TieneVehiculo BOOLEAN",
-                "TieneHerramientas BOOLEAN", "Salario DECIMAL", "AceptaTerminos BOOLEAN", "EstaDisponible BOOLEAN", "FcmToken TEXT"
-            };
-
-            foreach (var col in columnasTrabajador)
+            finally
             {
-                try
-                {
-                    await _db.ExecuteAsync($"ALTER TABLE Trabajador ADD COLUMN {col};");
-                }
-                catch { }
+                _initializationLock.Release();
             }
         }
 
@@ -89,6 +103,15 @@ namespace CrownBuilders
 
             _httpClient.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        private static async Task<HttpResponseMessage> GetRemoteAsync(
+            string route,
+            CancellationToken cancellationToken = default)
+        {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(RemoteDataTimeout);
+            return await _httpClient.GetAsync(route, timeoutCts.Token).ConfigureAwait(false);
         }
 
 
@@ -162,7 +185,8 @@ namespace CrownBuilders
             return compania?.Correo ?? string.Empty;
         }
 
-        public static async Task<List<Trabajador>> ObtenerTrabajadoresAsync()
+        public static async Task<List<Trabajador>> ObtenerTrabajadoresAsync(
+            CancellationToken cancellationToken = default)
         {
             await InitAsync().ConfigureAwait(false);
 
@@ -172,7 +196,7 @@ namespace CrownBuilders
                 System.Diagnostics.Debug.WriteLine("[TRABAJADORES] Obteniendo datos desde Azure...");
 
                 // Usamos el cliente estático
-                var response = await _httpClient.GetAsync("auth/trabajadores").ConfigureAwait(false);
+                using var response = await GetRemoteAsync("auth/trabajadores", cancellationToken).ConfigureAwait(false);
                 System.Diagnostics.Debug.WriteLine($"[TRABAJADORES] Respuesta del servidor: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)
@@ -222,6 +246,7 @@ namespace CrownBuilders
                         }).ToList();
                     }
                 }
+
             }
             catch (TaskCanceledException)
             {
@@ -237,115 +262,125 @@ namespace CrownBuilders
             }
 
             // Si falla la API, usar datos locales (caché offline)
-            return await _db.Table<Trabajador>().ToListAsync();
+            return await _db.Table<Trabajador>().ToListAsync().ConfigureAwait(false);
         }
 
-        public static async Task<List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>> ObtenerCompaniasAsync()
+        public static async Task<List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>> ObtenerCompaniasAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var listaLocal = await ObtenerCompaniasLocalesAsync(cancellationToken).ConfigureAwait(false);
+            if (listaLocal.Count > 0)
+            {
+                return listaLocal;
+            }
+
+            return await ActualizarCompaniasDesdeApiAsync(cancellationToken).ConfigureAwait(false)
+                ?? listaLocal;
+        }
+
+        public static async Task<List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>> ObtenerCompaniasLocalesAsync(
+            CancellationToken cancellationToken = default)
+        {
+            await InitAsync().ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var perfilesLocales = await _db.Table<PerfilCompania>()
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var listaLocal = perfilesLocales.Select(p =>
+            {
+                double.TryParse(p.MontoPago, out var montoParsed);
+                return new CrownBuilders.Components.Pages.CompaniasDisponibles.Compania
+                {
+                    Id = p.Id,
+                    Nombre = p.NombreEmpresa ?? "Compañía",
+                    Ciudad = p.Ciudad ?? "Long Island",
+                    Especialidad = p.Especialidad ?? "General",
+                    FormaPago = p.FormaPago ?? string.Empty,
+                    MontoPago = montoParsed > 0 ? montoParsed : 40.0,
+                    Puntualidad = 5,
+                    Pagos = 5,
+                    Trato = 5
+                };
+            }).ToList();
+
+            System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Caché local: {listaLocal.Count} registros");
+            return listaLocal;
+        }
+
+        public static async Task<List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>?> ActualizarCompaniasDesdeApiAsync(
+            CancellationToken cancellationToken = default)
         {
             await InitAsync().ConfigureAwait(false);
 
-            // 1. Leer lo que ya tenemos guardado en SQLite local (Caché) - PRIORIDAD INMEDIATA
-            var perfilesLocales = await _db.Table<PerfilCompania>().ToListAsync().ConfigureAwait(false);
-            var listaLocal = new List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>();
-
-            if (perfilesLocales != null && perfilesLocales.Count > 0)
-            {
-                foreach (var p in perfilesLocales)
-                {
-                    double.TryParse(p.MontoPago, out double montoParsed);
-                    listaLocal.Add(new CrownBuilders.Components.Pages.CompaniasDisponibles.Compania
-                    {
-                        Id = p.Id,
-                        Nombre = p.NombreEmpresa ?? "Compañía",
-                        Ciudad = p.Ciudad ?? "Long Island",
-                        Especialidad = p.Especialidad ?? "General",
-                        FormaPago = p.FormaPago ?? string.Empty,
-                        MontoPago = montoParsed > 0 ? montoParsed : 40.0,
-                        Puntualidad = 5,
-                        Pagos = 5,
-                        Trato = 5
-                    });
-                }
-                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Retornando {listaLocal.Count} compañías desde caché local");
-                return listaLocal; // Retornar inmediatamente datos locales para mejor UX
-            }
-
-            // 2. CASO ESPECIAL (Primer inicio): Si el teléfono está totalmente vacío, SÍ esperamos a Azure para no mostrar la lista en blanco
-            System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] Primer inicio (local vacío). Descargando desde Azure...");
-            
             try
             {
-                // Crear nueva instancia de HttpClient para evitar problemas de reutilización
-                using var client = new HttpClient();
-                client.BaseAddress = new Uri(_apiBaseUrl);
-                client.Timeout = TimeSpan.FromSeconds(30); // Timeout aumentado para mejor tolerancia
-
-                var response = await client.GetAsync("Perfil/listar-companias").ConfigureAwait(false);
-
-                if (response.IsSuccessStatusCode)
+                using var response = await GetRemoteAsync("Perfil/listar-companias", cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
                 {
-                    var companiasApi = await response.Content.ReadFromJsonAsync<List<CrownBuilders.Models.Compania>>().ConfigureAwait(false);
-                    if (companiasApi != null && companiasApi.Count > 0)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] {companiasApi.Count} compañías obtenidas de Azure");
-
-                        // Sincronizar con la base de datos local de forma optimizada usando InsertOrReplace
-                        foreach (var companiaApi in companiasApi)
-                        {
-                            var companiaDB = new PerfilCompania
-                            {
-                                Id = companiaApi.Id,
-                                FotoPerfil = companiaApi.FotoPerfil,
-                                NombreEmpresa = companiaApi.NombreEmpresa,
-                                Especialidad = companiaApi.Especialidad,
-                                Ciudad = companiaApi.Ciudad,
-                                Correo = companiaApi.Correo,
-                                Telefono = companiaApi.Telefono,
-                                Password = companiaApi.Password,
-                                FormaPago = companiaApi.FormaPago,
-                                MontoPago = companiaApi.MontoPago.ToString() ?? "0",
-                                NombreTitular = companiaApi.NombreTitular,
-                                NumeroTarjeta = companiaApi.NumeroTarjeta,
-                                FechaExpiracion = companiaApi.FechaExpiracion,
-                                CVC = companiaApi.CVC,
-                                FcmToken = companiaApi.FcmToken
-                            };
-                            await _db.InsertOrReplaceAsync(companiaDB).ConfigureAwait(false);
-                        }
-                        System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] Sincronización local completada");
-
-                        // Retornar directamente desde Azure (foco en nube)
-                        return companiasApi.Select(c => new CrownBuilders.Components.Pages.CompaniasDisponibles.Compania
-                        {
-                            Id = c.Id,
-                            Nombre = c.NombreEmpresa,
-                            Ciudad = c.Ciudad,
-                            Especialidad = c.Especialidad,
-                            FormaPago = c.FormaPago,
-                            MontoPago = (double)c.MontoPago,
-                            Puntualidad = 5,
-                            Pagos = 5,
-                            Trato = 5
-                        }).ToList();
-                    }
+                    System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Respuesta remota no exitosa: {response.StatusCode}");
+                    return null;
                 }
+
+                var companiasApi = await response.Content
+                    .ReadFromJsonAsync<List<CrownBuilders.Models.Compania>>(cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                if (companiasApi is null)
+                {
+                    return null;
+                }
+
+                foreach (var companiaApi in companiasApi)
+                {
+                    await _db.InsertOrReplaceAsync(new PerfilCompania
+                    {
+                        Id = companiaApi.Id,
+                        FotoPerfil = companiaApi.FotoPerfil,
+                        NombreEmpresa = companiaApi.NombreEmpresa,
+                        Especialidad = companiaApi.Especialidad,
+                        Ciudad = companiaApi.Ciudad,
+                        Correo = companiaApi.Correo,
+                        Telefono = companiaApi.Telefono,
+                        Password = companiaApi.Password,
+                        FormaPago = companiaApi.FormaPago,
+                        MontoPago = companiaApi.MontoPago.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        NombreTitular = companiaApi.NombreTitular,
+                        NumeroTarjeta = companiaApi.NumeroTarjeta,
+                        FechaExpiracion = companiaApi.FechaExpiracion,
+                        CVC = companiaApi.CVC,
+                        FcmToken = companiaApi.FcmToken
+                    }).ConfigureAwait(false);
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Directorio remoto sincronizado: {companiasApi.Count} registros");
+                return companiasApi.Select(c => new CrownBuilders.Components.Pages.CompaniasDisponibles.Compania
+                {
+                    Id = c.Id,
+                    Nombre = c.NombreEmpresa ?? string.Empty,
+                    Ciudad = c.Ciudad ?? string.Empty,
+                    Especialidad = c.Especialidad ?? string.Empty,
+                    FormaPago = c.FormaPago ?? string.Empty,
+                    MontoPago = (double)c.MontoPago,
+                    Puntualidad = 5,
+                    Pagos = 5,
+                    Trato = 5
+                }).ToList();
             }
             catch (TaskCanceledException)
             {
-                System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] Timeout al obtener datos de Azure - usando caché local");
+                System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] Tiempo remoto agotado; se conserva la caché local");
             }
-            catch (HttpRequestException ex)
+            catch (HttpRequestException exception)
             {
-                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error de red: {ex.Message} - usando caché local");
+                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error de red; se conserva la caché local: {exception.Message}");
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
-                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error al obtener compañías de la API: {ex.Message} - usando caché local");
+                System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Error de actualización: {exception.Message}");
             }
 
-            // 3. Fallback: Retornar lista vacía si no hay datos ni local ni en Azure
-            System.Diagnostics.Debug.WriteLine("[COMPAÑÍAS] No hay datos disponibles");
-            return new List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>();
+            return null;
         }
 
         public static async Task<PerfilCompania> ObtenerCompaniaPorIdAsync(int id)

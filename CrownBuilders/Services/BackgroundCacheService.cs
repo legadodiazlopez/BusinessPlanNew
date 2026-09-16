@@ -70,7 +70,7 @@ namespace CrownBuilders.Services
                 // 2. Precargar compañías de forma segura
                 try
                 {
-                    var companias = await DatabaseHelper.ObtenerCompaniasAsync();
+                    var companias = await DatabaseHelper.ActualizarCompaniasDesdeApiAsync();
                     companiasCount = companias?.Count ?? 0;
                 }
                 catch (Exception exCo)
