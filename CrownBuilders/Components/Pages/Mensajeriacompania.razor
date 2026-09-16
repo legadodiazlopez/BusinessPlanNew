@@ -13,7 +13,7 @@
     <!-- ENCABEZADO MEJORADO: BOTONES DE VOLVER, RESEÑA COMPACTA Y REPORTAR DESTACADO -->
     <div class="cb-chat-header p-3 d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center">
-            <button class="btn btn-link text-dark p-0 me-2" @onclick="Volver">← Volver</button>
+            <button class="cb-chat-back-button me-2" @onclick="Volver">← <span>Volver</span></button>
             <h5 class="fw-bold mb-0 ms-2">Chat con @nombreTrabajador</h5>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -49,8 +49,15 @@
             <span class="cb-chat-status-dot flex-shrink-0" aria-hidden="true"></span>
             <span>@(chatConectado ? "Online" : estadoChat)</span>
         </div>
+        @if (otroEstaEscribiendo)
+        {
+            <div class="cb-typing-indicator mb-2" aria-live="polite">
+                <span class="cb-typing-dots" aria-hidden="true">•••</span>
+                Escribiendo...
+            </div>
+        }
         <div class="input-group">
-            <input type="text" class="form-control" placeholder="Escribe un mensaje..." @bind="mensajeNuevo" @bind:event="oninput" @onkeyup="HandleKeyUp" />
+            <input type="text" class="form-control" placeholder="Escribe un mensaje..." value="@mensajeNuevo" @oninput="HandleMessageInput" @onkeyup="HandleKeyUp" />
             <button class="btn btn-gold fw-bold" disabled="@(!chatConectado)" @onclick="EnviarMensaje">Enviar</button>
         </div>
     </div>
@@ -69,6 +76,9 @@
     private int conversationId;
     private bool chatConectado;
     private bool chatInicioIntentado;
+    private bool otroEstaEscribiendo;
+    private bool typingNotificationSent;
+    private CancellationTokenSource? typingCancellation;
     private string estadoChat = "Conectando...";
 
     public class MensajeUI
@@ -119,6 +129,7 @@
             if (conversationId > 0)
             {
                 MessagingService.MessageReceived += OnMessageReceivedAsync;
+                MessagingService.TypingChanged += OnTypingChangedAsync;
             }
         }
         catch (Exception ex)
@@ -205,6 +216,7 @@
 
         await InvokeAsync(() =>
         {
+            otroEstaEscribiendo = false;
             if (messages.Any(item => item.ClientMessageId == message.ClientMessageId))
             {
                 return;
@@ -219,6 +231,21 @@
                 Texto = message.Text,
                 EsMio = string.Equals(message.Sender, "compania", StringComparison.OrdinalIgnoreCase)
             });
+            StateHasChanged();
+        });
+    }
+
+    private async Task OnTypingChangedAsync(TypingNotification notification)
+    {
+        if (notification.ConversationId != conversationId ||
+            !string.Equals(notification.Sender, "trabajador", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        await InvokeAsync(() =>
+        {
+            otroEstaEscribiendo = notification.IsTyping;
             StateHasChanged();
         });
     }
@@ -239,6 +266,8 @@
         {
             return;
         }
+
+        await DetenerIndicadorEscrituraAsync();
 
         if (!string.IsNullOrWhiteSpace(mensajeNuevo))
         {
@@ -304,6 +333,52 @@
         }
     }
 
+    private async Task HandleMessageInput(ChangeEventArgs e)
+    {
+        mensajeNuevo = e.Value?.ToString() ?? string.Empty;
+
+        typingCancellation?.Cancel();
+        typingCancellation?.Dispose();
+        typingCancellation = new CancellationTokenSource();
+
+        if (string.IsNullOrWhiteSpace(mensajeNuevo))
+        {
+            await DetenerIndicadorEscrituraAsync();
+            return;
+        }
+
+        if (!typingNotificationSent)
+        {
+            typingNotificationSent = true;
+            await MessagingService.SetTypingAsync(conversationId, true);
+        }
+
+        _ = DetenerIndicadorTrasPausaAsync(typingCancellation.Token);
+    }
+
+    private async Task DetenerIndicadorTrasPausaAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2.5), cancellationToken);
+            await DetenerIndicadorEscrituraAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task DetenerIndicadorEscrituraAsync()
+    {
+        if (!typingNotificationSent)
+        {
+            return;
+        }
+
+        typingNotificationSent = false;
+        await MessagingService.SetTypingAsync(conversationId, false);
+    }
+
     private async Task HandleKeyUp(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
     {
         if (e.Key == "Enter")
@@ -315,6 +390,10 @@
     public async ValueTask DisposeAsync()
     {
         MessagingService.MessageReceived -= OnMessageReceivedAsync;
+        MessagingService.TypingChanged -= OnTypingChangedAsync;
+        await DetenerIndicadorEscrituraAsync();
+        typingCancellation?.Cancel();
+        typingCancellation?.Dispose();
         await Task.CompletedTask;
     }
 }

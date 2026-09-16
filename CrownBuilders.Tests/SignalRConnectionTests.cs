@@ -62,6 +62,28 @@ public sealed class SignalRConnectionTests
     }
 
     [Fact]
+    public void TypingNotifications_AreWiredThroughTheHubAndBothChatPages()
+    {
+        var hub = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders.API", "Hub", "ChatHub.cs")));
+        var messagingService = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Services", "MessagingService.cs")));
+        var workerPage = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Components", "Pages", "Mensajeriatrabajor.razor")));
+        var companyPage = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Components", "Pages", "Mensajeriacompania.razor")));
+
+        Assert.Contains("public async Task Typing(int conversationId, bool isTyping)", hub);
+        Assert.Contains("TypingChanged", hub);
+        Assert.Contains("connection.On<int, string, bool>(\"TypingChanged\"", messagingService);
+        Assert.Contains("_hubConnection.InvokeAsync(\n                \"Typing\"", messagingService);
+        Assert.Contains("Escribiendo...", workerPage);
+        Assert.Contains("Escribiendo...", companyPage);
+        Assert.Contains("TypingChanged += OnTypingChangedAsync", workerPage);
+        Assert.Contains("TypingChanged += OnTypingChangedAsync", companyPage);
+    }
+
+    [Fact]
     public void ApiDelivery_IsNotCoupledToRequestCancellation()
     {
         var controller = File.ReadAllText(FindWorkspaceFile(

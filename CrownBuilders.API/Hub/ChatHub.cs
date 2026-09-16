@@ -118,4 +118,20 @@ public sealed class ChatHub : Hub
 
         return response;
     }
+
+    public async Task Typing(int conversationId, bool isTyping)
+    {
+        var user = AuthenticatedUserAccessor.FromPrincipal(Context.User);
+        await _conversationService.GetAuthorizedAsync(
+            conversationId,
+            user,
+            Context.ConnectionAborted);
+
+        await Clients.OthersInGroup(GetConversationGroup(conversationId)).SendAsync(
+            "TypingChanged",
+            conversationId,
+            user.UserType,
+            isTyping,
+            Context.ConnectionAborted);
+    }
 }

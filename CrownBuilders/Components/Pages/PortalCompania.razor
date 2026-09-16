@@ -1,8 +1,10 @@
 ﻿@page "/portal-compania"
 @using CrownBuilders
+@using CrownBuilders.Services
 @using System.Net.Http.Json
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject ApiService ApiService
 
 <div class="container mt-4 px-3 cb-page">
     <div class="cb-page-toolbar d-flex justify-content-between align-items-center pb-3 mb-3">
@@ -160,7 +162,9 @@
     {
         try
         {
-            var perfilTask = Task.Run(() => DatabaseHelper.ObtenerPerfilCompaniaAsync());
+            await ApiService.RestoreAuthTokenAsync();
+            var companiaIdActual = ApiService.AuthenticatedUserId ?? 0;
+            var perfilTask = Task.Run(() => DatabaseHelper.ObtenerPerfilCompaniaAsync(companiaIdActual));
             var trabajadoresTask = Task.Run(() => DatabaseHelper.ObtenerTrabajadoresAsync());
 
             await Task.WhenAll(perfilTask, trabajadoresTask);

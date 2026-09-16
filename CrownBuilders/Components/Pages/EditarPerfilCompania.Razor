@@ -1,7 +1,9 @@
 @page "/editar-perfil-compania"
 @using CrownBuilders
+@using CrownBuilders.Services
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@inject ApiService ApiService
 
 <div class="container mt-4">
     <h3>Editar Perfil de Compañía</h3>
@@ -81,7 +83,8 @@
     protected override async Task OnInitializedAsync()
     {
         // Auto-rellenado: intenta cargar los datos al iniciar
-        var datosCargados = await DatabaseHelper.ObtenerPerfilCompaniaAsync();
+        await ApiService.RestoreAuthTokenAsync();
+        var datosCargados = await DatabaseHelper.ObtenerPerfilCompaniaAsync(ApiService.AuthenticatedUserId ?? 0);
         if (datosCargados != null)
         {
             perfil = datosCargados;

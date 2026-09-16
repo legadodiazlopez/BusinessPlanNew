@@ -1,5 +1,6 @@
 using Xunit;
 using CompaniaViewModel = CrownBuilders.Components.Pages.CompaniasDisponibles.Compania;
+using CompaniasDisponiblesPage = CrownBuilders.Components.Pages.CompaniasDisponibles;
 using CrownBuilders.API.Models;
 using System;
 using System.Collections.Generic;
@@ -173,6 +174,14 @@ namespace CrownBuilders.Tests
             // Assert
             Assert.Equal("150.00", precioRenderizado);
             Assert.StartsWith("$", $"${precioRenderizado}");
+        }
+
+        [Theory]
+        [InlineData("PorJornada", "/ jornada")]
+        [InlineData("PorHora", "/ hora")]
+        public void EtiquetaFormaPago_UsaLaUnidadGuardada(string formaPago, string expected)
+        {
+            Assert.Equal(expected, CompaniasDisponiblesPage.ObtenerEtiquetaFormaPago(formaPago));
         }
     }
 }

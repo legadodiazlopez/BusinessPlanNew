@@ -1,5 +1,6 @@
 @page "/garantia"
 @inject IJSRuntime JS
+@inject CrownBuilders.Services.ApiService ApiService
 @inject CrownBuilders.Services.StripeService StripeServ
 @using CrownBuilders;
 
@@ -100,7 +101,8 @@ protected override async Task OnInitializedAsync()
 {
     try
     {
-        string emailActivo = await DatabaseHelper.ObtenerEmailCompaniaActivaAsync();
+        await ApiService.RestoreAuthTokenAsync();
+        string emailActivo = await DatabaseHelper.ObtenerEmailCompaniaActivaAsync(ApiService.AuthenticatedUserId ?? 0);
         if (!string.IsNullOrEmpty(emailActivo))
         {
             correoCompania = emailActivo;

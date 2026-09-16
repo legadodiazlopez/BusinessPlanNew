@@ -248,6 +248,24 @@ a, .btn-link {
     white-space: nowrap;
 }
 
+.cb-chat-back-button {
+    background: transparent;
+    border: 0;
+    border-radius: var(--cb-radius-sm);
+    color: var(--cb-navy);
+    font-weight: 600;
+    padding: 0.35rem 0.45rem;
+    text-decoration: none !important;
+    transition: background-color 160ms ease, color 160ms ease;
+}
+
+.cb-chat-back-button:hover,
+.cb-chat-back-button:focus-visible {
+    background-color: var(--cb-background);
+    color: var(--cb-gold);
+    outline: none;
+}
+
 .cb-chat-body { background-color: var(--cb-background); padding-bottom: 1.25rem !important; }
 
 .cb-chat-message {
@@ -278,6 +296,20 @@ a, .btn-link {
 .cb-chat-status { color: var(--cb-muted); font-size: 0.8rem; }
 .cb-chat-status.is-online { color: var(--cb-success); }
 .cb-chat-status-dot { background-color: currentColor; border-radius: 50%; display: inline-block; height: 0.5rem; width: 0.5rem; }
+
+.cb-typing-indicator {
+    color: var(--cb-muted);
+    font-size: 0.78rem;
+    min-height: 1.1rem;
+}
+
+.cb-typing-dots {
+    color: var(--cb-gold);
+    display: inline-block;
+    font-weight: 700;
+    letter-spacing: 0.12rem;
+    margin-right: 0.35rem;
+}
 
 .cb-modal-overlay {
     align-items: center;

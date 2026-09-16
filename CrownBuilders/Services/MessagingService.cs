@@ -19,6 +19,7 @@ public sealed class MessagingService : IAsyncDisposable
     }
 
     public event Func<MensajeApiResponse, Task>? MessageReceived;
+    public event Func<TypingNotification, Task>? TypingChanged;
 
     public async Task StartAsync(int conversationId, CancellationToken cancellationToken = default)
     {
@@ -116,6 +117,31 @@ public sealed class MessagingService : IAsyncDisposable
         }
     }
 
+    public async Task SetTypingAsync(
+        int conversationId,
+        bool isTyping,
+        CancellationToken cancellationToken = default)
+    {
+        if (_hubConnection?.State != HubConnectionState.Connected || conversationId <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await _hubConnection.InvokeAsync(
+                "Typing",
+                new object?[] { conversationId, isTyping },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is HubException or HttpRequestException or TimeoutException or InvalidOperationException)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CHAT] No se pudo actualizar el indicador de escritura: {exception.Message}");
+        }
+    }
+
     private HubConnection CreateConnection()
     {
         var handler = new HttpClientHandler
@@ -147,6 +173,7 @@ public sealed class MessagingService : IAsyncDisposable
             .Build();
 
         connection.On<MensajeApiResponse>("MessageReceived", HandleMessageReceivedAsync);
+        connection.On<int, string, bool>("TypingChanged", HandleTypingChangedAsync);
         connection.Reconnecting += exception =>
         {
             System.Diagnostics.Debug.WriteLine($"[CHAT] SignalR reconectando: {exception?.Message ?? "sin detalle"}");
@@ -223,6 +250,29 @@ public sealed class MessagingService : IAsyncDisposable
         }
     }
 
+    private async Task HandleTypingChangedAsync(
+        int conversationId,
+        string sender,
+        bool isTyping)
+    {
+        if (_conversationId != conversationId)
+        {
+            return;
+        }
+
+        var handlers = TypingChanged;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        var notification = new TypingNotification(conversationId, sender, isTyping);
+        foreach (var handler in handlers.GetInvocationList().Cast<Func<TypingNotification, Task>>())
+        {
+            await handler(notification).ConfigureAwait(false);
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_hubConnection is not null)
@@ -233,3 +283,5 @@ public sealed class MessagingService : IAsyncDisposable
         _connectionLock.Dispose();
     }
 }
+
+public sealed record TypingNotification(int ConversationId, string Sender, bool IsTyping);

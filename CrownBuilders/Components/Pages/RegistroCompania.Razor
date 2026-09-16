@@ -3,7 +3,7 @@
 @using CrownBuilders.Services
 @using CrownBuilders.Models
 @using System.Net.Http.Json
-@using System.Text.RegularExpressions
+@using System.Globalization
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject ApiService ApiService
@@ -71,11 +71,11 @@
         <label>Ciudad</label>
         <input class="form-control" @bind="perfil.Ciudad" disabled="@cargando" />
         
-        <label>Correo Electrónico</label>
-        <input class="form-control" type="email" @bind="perfil.Correo" placeholder="correo@dominio.com" disabled="@cargando" />
+        <label class="form-label">Correo Electrónico</label>
+        <input class="form-control" type="email" @bind="perfil.Correo" placeholder="correo@dominio.com" autocomplete="email" required disabled="@cargando" />
         
-        <label>Teléfono</label>
-        <input class="form-control" type="tel" inputmode="numeric" @bind="perfil.Telefono" placeholder="Solo números" disabled="@cargando" />
+        <label class="form-label">Teléfono</label>
+        <input class="form-control" type="tel" inputmode="numeric" pattern="[0-9]{10}" minlength="10" maxlength="10" @bind="perfil.Telefono" placeholder="10 dígitos" autocomplete="tel" required disabled="@cargando" />
 
         <label>Contraseña</label>
         <input type="password" class="form-control" @bind="perfil.Password" disabled="@cargando" />
@@ -92,14 +92,14 @@
         <label>Nombre del Titular</label>
         <input class="form-control" @bind="perfil.NombreTitular" disabled="@cargando" />
         
-        <label>Número de Tarjeta</label>
-        <input class="form-control" inputmode="numeric" @bind="perfil.NumeroTarjeta" placeholder="Solo números" disabled="@cargando" />
+        <label class="form-label">Número de Tarjeta</label>
+        <input class="form-control" inputmode="numeric" pattern="[0-9]{13,19}" minlength="13" maxlength="19" @bind="perfil.NumeroTarjeta" placeholder="13 a 19 dígitos" autocomplete="cc-number" required disabled="@cargando" />
         
-        <label>Expiración (MM/AA)</label>
-        <input class="form-control" @bind="perfil.FechaExpiracion" placeholder="12/28" disabled="@cargando" />
+        <label class="form-label">Expiración</label>
+        <input class="form-control" type="month" value="@fechaExpiracionMes" @onchange="ActualizarFechaExpiracion" min="@MesMinimoExpiracion" autocomplete="cc-exp" required disabled="@cargando" />
         
-        <label>Código de Seguridad (CVC)</label>
-        <input class="form-control" type="password" inputmode="numeric" maxlength="4" @bind="perfil.CVC" placeholder="***" disabled="@cargando" />
+        <label class="form-label">Código de Seguridad (CVC)</label>
+        <input class="form-control" type="password" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" @bind="perfil.CVC" placeholder="3 dígitos" autocomplete="cc-csc" required disabled="@cargando" />
 
         <div class="alert alert-info mt-2" style="font-size: 0.9em; padding: 10px;">
             <strong>Suscripción:</strong> $15 USD mensuales.
@@ -175,33 +175,81 @@
     private string codigoIngresado = "123456";
     private string codigoGenerado = "123456";
     private string mensajeError = string.Empty;
+    private string fechaExpiracionMes = string.Empty;
 
-    private bool EsCorreoValido(string email)
+    private string MesMinimoExpiracion =>
+        DateTime.Today.AddMonths(1).ToString("yyyy-MM", CultureInfo.InvariantCulture);
+
+    private void ActualizarFechaExpiracion(ChangeEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(email)) return false;
-        try {
-            return Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$", RegexOptions.IgnoreCase);
-        } catch {
+        fechaExpiracionMes = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private bool ValidarFormulario()
+    {
+        if (string.IsNullOrWhiteSpace(perfil.NombreEmpresa) ||
+            string.IsNullOrWhiteSpace(perfil.Especialidad) ||
+            string.IsNullOrWhiteSpace(perfil.Ciudad) ||
+            string.IsNullOrWhiteSpace(perfil.Correo) ||
+            string.IsNullOrWhiteSpace(perfil.Telefono) ||
+            string.IsNullOrWhiteSpace(perfil.Password) ||
+            string.IsNullOrWhiteSpace(perfil.FormaPago) ||
+            string.IsNullOrWhiteSpace(perfil.MontoPago) ||
+            string.IsNullOrWhiteSpace(perfil.NombreTitular) ||
+            string.IsNullOrWhiteSpace(perfil.NumeroTarjeta) ||
+            string.IsNullOrWhiteSpace(fechaExpiracionMes) ||
+            string.IsNullOrWhiteSpace(perfil.CVC) ||
+            !perfil.AceptaTerminos)
+        {
+            mensajeError = "Completa todos los campos requeridos y acepta los términos.";
             return false;
         }
+
+        if (!CompanyRegistrationValidation.IsValidEmail(perfil.Correo))
+        {
+            mensajeError = "Ingresa un correo electrónico válido, por ejemplo: nombre@dominio.com.";
+            return false;
+        }
+
+        if (!CompanyRegistrationValidation.IsValidPhone(perfil.Telefono))
+        {
+            mensajeError = "El teléfono debe contener exactamente 10 dígitos numéricos.";
+            return false;
+        }
+
+        if (!CompanyRegistrationValidation.IsValidCardNumber(perfil.NumeroTarjeta))
+        {
+            mensajeError = "El número de tarjeta debe tener entre 13 y 19 dígitos y ser válido.";
+            return false;
+        }
+
+        if (!CompanyRegistrationValidation.IsValidExpiration(fechaExpiracionMes, DateTime.Today))
+        {
+            mensajeError = "Selecciona una fecha de expiración posterior al mes actual.";
+            return false;
+        }
+
+        if (!CompanyRegistrationValidation.IsValidCvc(perfil.CVC))
+        {
+            mensajeError = "El código de seguridad debe contener exactamente 3 dígitos.";
+            return false;
+        }
+
+        if (!decimal.TryParse(perfil.MontoPago, out var monto) || monto <= 0)
+        {
+            mensajeError = "El monto a pagar debe ser mayor que cero.";
+            return false;
+        }
+
+        return true;
     }
 
     private async Task IniciarVerificacion()
     {
         mensajeError = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(perfil.NombreEmpresa) || 
-            string.IsNullOrWhiteSpace(perfil.Correo) || 
-            string.IsNullOrWhiteSpace(perfil.Telefono) ||
-            !perfil.AceptaTerminos)
+        if (!ValidarFormulario())
         {
-            mensajeError = "Por favor, completa los campos requeridos y acepta los términos.";
-            return;
-        }
-
-        if (!EsCorreoValido(perfil.Correo))
-        {
-            mensajeError = "Por favor, ingresa un correo electrónico válido.";
             return;
         }
 
@@ -271,6 +319,8 @@
             decimal monto = 0;
             decimal.TryParse(perfil.MontoPago, out monto);
 
+            perfil.FechaExpiracion = CompanyRegistrationValidation.ToStoredExpiration(fechaExpiracionMes);
+
             var companiaParaApi = new Compania
             {
                 Id = perfil.Id,
@@ -296,7 +346,20 @@
             {
                 perfil.Id = resultadoAPI.Id;
                 await DatabaseHelper.GuardarPerfilCompaniaAsync(perfil);
-                
+
+                var sesionNueva = await ApiService.LoginCompaniaAsync(
+                    companiaParaApi.Correo,
+                    companiaParaApi.Password);
+
+                if (sesionNueva?.Exitoso != true
+                    || string.IsNullOrWhiteSpace(sesionNueva.Token)
+                    || sesionNueva.Id != resultadoAPI.Id)
+                {
+                    mensajeError = "La cuenta se creó, pero no se pudo iniciar sesión automáticamente. Inicia sesión con la nueva cuenta.";
+                    Navigation.NavigateTo("/login-compania");
+                    return;
+                }
+
                 await JS.InvokeVoidAsync("alert", "¡Registro exitoso! Cuenta creada correctamente.");
                 Navigation.NavigateTo("/portal-compania");
             }

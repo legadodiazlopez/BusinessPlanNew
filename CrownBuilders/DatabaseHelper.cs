@@ -132,16 +132,33 @@ namespace CrownBuilders
             return true;
         }
 
-        public static async Task<PerfilCompania> ObtenerPerfilCompaniaAsync()
+        public static async Task<PerfilCompania?> ObtenerPerfilCompaniaAsync(int companiaId)
         {
             await InitAsync().ConfigureAwait(false);
-            return await _db.Table<PerfilCompania>().FirstOrDefaultAsync().ConfigureAwait(false);
+
+            if (companiaId <= 0)
+            {
+                return null;
+            }
+
+            return await _db.Table<PerfilCompania>()
+                .Where(p => p.Id == companiaId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
         }
 
-        public static async Task<string> ObtenerEmailCompaniaActivaAsync()
+        public static async Task<string> ObtenerEmailCompaniaActivaAsync(int companiaId)
         {
             await InitAsync().ConfigureAwait(false);
-            var compania = await _db.Table<PerfilCompania>().FirstOrDefaultAsync().ConfigureAwait(false);
+            if (companiaId <= 0)
+            {
+                return string.Empty;
+            }
+
+            var compania = await _db.Table<PerfilCompania>()
+                .Where(p => p.Id == companiaId)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
             return compania?.Correo ?? string.Empty;
         }
 
@@ -242,6 +259,7 @@ namespace CrownBuilders
                         Nombre = p.NombreEmpresa ?? "Compañía",
                         Ciudad = p.Ciudad ?? "Long Island",
                         Especialidad = p.Especialidad ?? "General",
+                        FormaPago = p.FormaPago ?? string.Empty,
                         MontoPago = montoParsed > 0 ? montoParsed : 40.0,
                         Puntualidad = 5,
                         Pagos = 5,
@@ -303,6 +321,7 @@ namespace CrownBuilders
                             Nombre = c.NombreEmpresa,
                             Ciudad = c.Ciudad,
                             Especialidad = c.Especialidad,
+                            FormaPago = c.FormaPago,
                             MontoPago = (double)c.MontoPago,
                             Puntualidad = 5,
                             Pagos = 5,
