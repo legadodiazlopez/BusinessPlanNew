@@ -83,7 +83,7 @@ public sealed class MensajesController : ControllerBase
 
             if (result.Outcome == MessageWriteOutcome.Created)
             {
-                await _messageDeliveryService.DeliverAsync(response, cancellationToken);
+                await _messageDeliveryService.DeliverAsync(response);
             }
 
             return result.Outcome == MessageWriteOutcome.Created
@@ -122,6 +122,11 @@ public sealed class MensajesController : ControllerBase
         if (limit is < 1 or > MaxPageSize)
         {
             return BadRequest(new { error = $"El límite debe estar entre 1 y {MaxPageSize}." });
+        }
+
+        if (beforeSentAtUtc.HasValue != beforeMessageId.HasValue)
+        {
+            return BadRequest(new { error = "El cursor requiere fecha e identificador del mensaje." });
         }
 
         try
@@ -199,7 +204,7 @@ public sealed class MensajesController : ControllerBase
             var response = MessageResponseMapper.FromEntity(result.Message);
             if (result.Outcome == MessageWriteOutcome.Created)
             {
-                await _messageDeliveryService.DeliverAsync(response, cancellationToken);
+                await _messageDeliveryService.DeliverAsync(response);
             }
 
             return Ok(response);

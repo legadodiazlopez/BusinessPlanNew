@@ -9,32 +9,32 @@
 @inject CrownBuilders.Services.ApiService ApiService
 @inject CrownBuilders.Services.MessagingService MessagingService
 
-<div class="container-fluid d-flex flex-column" style="height: 100vh; background-color: #f8f9fa;">
+<div class="container-fluid d-flex flex-column cb-chat-screen">
     <!-- ENCABEZADO MEJORADO: BOTONES DE VOLVER, RESEÑA COMPACTA Y REPORTAR DESTACADO -->
-    <div class="bg-white p-3 shadow-sm d-flex align-items-center justify-content-between">
+    <div class="cb-chat-header p-3 d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center">
-            <button class="btn btn-sm btn-link text-dark p-0 me-2" @onclick="Volver" style="text-decoration: none;">← Volver</button>
-            <h5 class="fw-bold mb-0 ms-2" style="color: #0A1128;">Chat con @nombreTrabajador</h5>
+            <button class="btn btn-link text-dark p-0 me-2" @onclick="Volver">← Volver</button>
+            <h5 class="fw-bold mb-0 ms-2">Chat con @nombreTrabajador</h5>
         </div>
         <div class="d-flex align-items-center gap-2">
             <!-- Diseño profesional y discreto para "Próximamente" -->
-            <div class="bg-light text-secondary px-2 py-1" style="font-size: 0.65rem; border: 1px solid #dee2e6; border-radius: 12px; opacity: 0.8; user-select: none;">
+            <div class="bg-light text-secondary px-2 py-1 rounded-pill small cb-chat-coming-soon">
                 ⭐ Reseñas <span class="fst-italic">Próximamente</span>
             </div>
             <!-- Botón de reportar más visible -->
-            <button class="btn btn-sm btn-danger fw-bold px-3 shadow-sm" style="font-size: 0.8rem; border-radius: 12px;" @onclick="ReportarCuenta">
+            <button class="btn btn-sm btn-danger fw-bold px-3 shadow-sm rounded-pill" @onclick="ReportarCuenta">
                 Reportar
             </button>
         </div>
     </div>
 
     <!-- ÁREA DE MENSAJES -->
-    <div class="flex-grow-1 p-3 overflow-auto">
+    <div class="flex-grow-1 p-3 overflow-auto cb-chat-body">
         @foreach (var msg in messages)
         {
             <div class="d-flex mb-3 @(msg.EsMio ? "justify-content-end" : "justify-content-start")">
-                <div class="p-2 px-3 shadow-sm @(msg.EsMio ? "bg-warning text-dark" : "bg-white text-dark")" style="border-radius: 15px; max-width: 80%;">
-                    <span class="fw-bold d-block mb-1" style="font-size: 0.75rem; opacity: 0.8;">
+                <div class="cb-chat-message @(msg.EsMio ? "is-mine" : "is-theirs")">
+                    <span class="cb-chat-sender fw-bold d-block mb-1">
                         @(msg.EsMio ? "Tú" : msg.Remitente)
                     </span>
                     <p class="mb-0 small">@msg.Texto</p>
@@ -44,13 +44,14 @@
     </div>
 
     <!-- ENTRADA DE TEXTO -->
-    <div class="bg-white p-3 shadow-lg">
-        <div class="small text-muted mb-2">
-            Estado: @(chatConectado ? "Conectado en tiempo real" : estadoChat)
+    <div class="cb-chat-composer">
+        <div class="cb-chat-status @(chatConectado ? "is-online" : "is-offline") mb-2 d-flex align-items-center gap-2" aria-live="polite">
+            <span class="cb-chat-status-dot flex-shrink-0" aria-hidden="true"></span>
+            <span>@(chatConectado ? "Online" : estadoChat)</span>
         </div>
         <div class="input-group">
             <input type="text" class="form-control" placeholder="Escribe un mensaje..." @bind="mensajeNuevo" @bind:event="oninput" @onkeyup="HandleKeyUp" />
-            <button class="btn text-white fw-bold" style="background-color: #D4AF37;" disabled="@(!chatConectado)" @onclick="EnviarMensaje">Enviar</button>
+            <button class="btn btn-gold fw-bold" disabled="@(!chatConectado)" @onclick="EnviarMensaje">Enviar</button>
         </div>
     </div>
 </div>

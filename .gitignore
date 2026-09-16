@@ -370,3 +370,7 @@ FodyWeavers.xsd
 .codex-test-obj*/
 .codex-android-output*/
 .codex-release-*/
+.codex-api-output*/
+
+# Guía local de despliegue con configuración de Azure
+/AZURE-DESPLIEGUE.md

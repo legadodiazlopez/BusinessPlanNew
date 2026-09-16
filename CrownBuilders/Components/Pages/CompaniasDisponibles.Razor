@@ -4,38 +4,18 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<style>
-    :root { --navy: #0A192F; --gold: #C5A059; }
-    .text-navy { color: var(--navy); }
-    .btn-gold { background-color: var(--navy); color: white; border: 2px solid var(--gold); }
-    .card-custom { border: 2px solid var(--gold); border-radius: 15px; }
-    
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    }
-</style>
-
-<div class="container mt-4">
+<div class="container mt-4 cb-page">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold text-navy m-0">Compañías</h3>
             <small class="text-muted">Buscando ayudantes</small>
         </div>
-        <button class="btn btn-sm btn-outline-secondary" @onclick="AbrirConfiguracion">
+        <button class="btn btn-cb-secondary" @onclick="AbrirConfiguracion">
             <i class="oi oi-cog"></i> Config
         </button>
     </div>
 
-    <div class="card p-3 mb-4 shadow-sm card-custom">
+    <div class="card p-3 mb-4 card-custom">
         <input type="text" class="form-control" placeholder="Buscar por ciudad o especialidad..." 
                @bind="textoBusqueda" @bind:event="oninput" />
     </div>
@@ -51,8 +31,8 @@
     }
     else if (!CompaniasFiltradas.Any())
     {
-        <div class="text-center my-5">
-            <p class="text-muted">No se encontraron compañías con esa búsqueda.</p>
+        <div class="cb-empty-state text-center my-5">
+            <p class="text-muted mb-0">No se encontraron compañías con esa búsqueda.</p>
         </div>
     }
     else
@@ -64,7 +44,7 @@
                     <div class="card shadow-sm h-100 card-custom">
                         <div class="card-body">
                             <div class="d-flex align-items-center mb-3">
-                                <div style="width: 60px; height: 60px; background: #eee; border-radius: 50%; margin-right: 15px;" class="d-flex align-items-center justify-content-center fw-bold text-navy">
+                                <div class="cb-avatar d-flex align-items-center justify-content-center fw-bold text-navy me-3">
                                     @(string.IsNullOrEmpty(c.Nombre) ? "C" : c.Nombre.Substring(0, 1).ToUpper())
                                 </div>
                                 <div>
@@ -76,7 +56,7 @@
 
                             <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-3">
                                 <span class="fw-bold text-navy fs-5">$@c.MontoPago.ToString("F2") / hr</span>
-                                <button class="btn btn-gold btn-sm px-4" @onclick="() => ContactarCompania(c)">Contactar</button>
+                                <button class="btn btn-gold px-4" @onclick="() => ContactarCompania(c)">Contactar</button>
                             </div>
                         </div>
                     </div>
@@ -88,8 +68,8 @@
 
 @if (mostrarConfig)
 {
-    <div class="modal-overlay">
-        <div class="card p-4 shadow" style="width: 90%; max-width: 400px; border-radius: 15px;">
+    <div class="cb-modal-overlay">
+        <div class="card cb-modal-card p-4 shadow">
             <h5 class="fw-bold text-navy mb-4">Configuración</h5>
             
             <div class="d-flex justify-content-between align-items-center mb-4">

@@ -1,37 +1,9 @@
 ﻿@page "/"
 @inject NavigationManager Navigation
 
-<style>
-    :root {
-        --navy: #0A192F;
-        --gold: #C5A059;
-    }
-    /* Botones estilo elegante con borde dorado */
-    .btn-gold { 
-        background-color: var(--navy); 
-        color: white; 
-        border: 2px solid var(--gold); 
-        transition: 0.3s; 
-    }
-    .btn-gold:hover { 
-        background-color: var(--gold); 
-        color: var(--navy); 
-        border-color: var(--navy);
-    }
-    /* Tarjetas con más presencia dorada */
-    .card-custom { 
-        border: 2px solid var(--gold); 
-        border-radius: 15px; 
-        background-color: #ffffff;
-        box-shadow: 0 6px 12px rgba(197, 160, 89, 0.2);
-    }
-    .text-gold { color: var(--gold); }
-    .header-box { background-color: var(--navy); color: white; border-bottom: 4px solid var(--gold); }
-</style>
-
-<div class="container mt-3 px-3">
-    <div class="text-center py-4 mb-4 rounded-3 header-box">
-        <h1 class="fw-bold text-gold">Crown Builders</h1>
+<div class="container mt-3 px-3 cb-page cb-page-narrow">
+    <div class="text-center py-4 px-3 mb-4 cb-page-header">
+        <h1 class="fw-bold text-gold mb-2">Crown Builders</h1>
         <p class="fst-italic">"Conectando el empleo con la oportunidad"</p>
     </div>
 
@@ -42,8 +14,8 @@
     <div class="col-12">
         <div class="card card-custom h-100 p-3">
             <div class="card-body text-center">
-                <h5 class="fw-bold text-navy">Soy Trabajador</h5>
-                <p class="text-muted small">Acceso a proyectos y oportunidades locales.</p>
+                <h5 class="fw-bold text-navy mb-2">Soy Trabajador</h5>
+                <p class="text-muted small mb-4">Acceso a proyectos y oportunidades locales.</p>
                 <button @onclick="IrATrabajadorLogin" class="btn btn-gold w-100 py-2 fw-bold">
                     Ingresar a mi perfil
                 </button>
@@ -52,11 +24,11 @@
     </div>
 
     <!-- Opción Compañía -->
-    <div class="col-12 mt-3">
+    <div class="col-12">
         <div class="card card-custom h-100 p-3">
             <div class="card-body text-center">
-                <h5 class="fw-bold text-navy">Soy Compañía</h5>
-                <p class="text-muted small">Gestiona tu perfil, vacantes y contratos seguros.</p>
+                <h5 class="fw-bold text-navy mb-2">Soy Compañía</h5>
+                <p class="text-muted small mb-4">Gestiona tu perfil, vacantes y contratos seguros.</p>
                 <button @onclick="IrACompaniaLogin" class="btn btn-gold w-100 py-2 fw-bold">
                     Ingresar a mi perfil
                 </button>

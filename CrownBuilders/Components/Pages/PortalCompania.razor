@@ -4,13 +4,13 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<div class="container mt-4 px-3" style="max-height: 100vh; overflow-y: auto;">
-    <div class="d-flex justify-content-between align-items-center pb-3 mb-3 border-bottom">
+<div class="container mt-4 px-3 cb-page">
+    <div class="cb-page-toolbar d-flex justify-content-between align-items-center pb-3 mb-3">
         <div>
-            <h2 class="fw-bold mb-1" style="color: #0A1128;">Portal de Compañía</h2>
+            <h2 class="fw-bold text-navy mb-1">Portal de Compañía</h2>
             <p class="text-muted small">Administra tu empresa y explora contratistas disponibles</p>
         </div>
-        <button class="btn btn-sm fw-bold px-3" style="background-color: #0A1128; color: #ffffff; border-radius: 8px;" @onclick="AlternarVista">
+        <button class="btn btn-cb-primary fw-bold px-3" @onclick="AlternarVista">
             @(mostrarConfiguracion ? "Ver Trabajadores" : "Configuración")
         </button>
     </div>
@@ -18,7 +18,7 @@
     @if (!mostrarConfiguracion)
     {
         <div class="mb-3">
-            <div class="input-group input-group-sm shadow-sm" style="border-radius: 12px; overflow: hidden;">
+            <div class="input-group shadow-sm cb-search-control">
                 <span class="input-group-text bg-white border-end-0 text-muted">🔍</span>
                 <input type="text" class="form-control border-start-0 ps-0" placeholder="Buscar por puesto o especialidad..." @bind="textoBusqueda" @bind:event="oninput">
             </div>
@@ -35,20 +35,20 @@
         }
         else
         {
-            <div class="lista-trabajadores" style="padding-bottom: 20px;">
+            <div class="lista-trabajadores pb-3">
                 @foreach (var trabajador in TrabajadoresFiltrados)
                 {
-                    <div class="card border-0 shadow-sm mb-3 p-3" style="border-radius: 16px; background: #ffffff;">
+                    <div class="card cb-list-card border-0 shadow-sm mb-3 p-3">
                         <div class="d-flex align-items-center mb-3">
                             
                             <!-- Foto de Perfil -->
                             @if (!string.IsNullOrEmpty(trabajador.FotoPerfil))
                             {
-                                <img src="@trabajador.FotoPerfil" alt="Foto de @trabajador.Nombre" class="rounded-circle me-3" style="width: 55px; height: 55px; object-fit: cover; border: 2px solid #0A1128;" />
+                                <img src="@trabajador.FotoPerfil" alt="Foto de @trabajador.Nombre" class="cb-profile-avatar rounded-circle me-3" />
                             }
                             else
                             {
-                                <div class="rounded-circle me-3 d-flex justify-content-center align-items-center text-white fw-bold" style="width: 55px; height: 55px; background-color: #0A1128;">
+                                <div class="cb-profile-avatar cb-profile-placeholder rounded-circle me-3 d-flex justify-content-center align-items-center text-white fw-bold">
                                     @(string.IsNullOrWhiteSpace(trabajador.Nombre) ? "?" : trabajador.Nombre.Substring(0, 1).ToUpper())
                                 </div>
                             }
@@ -57,7 +57,7 @@
                             <div class="flex-grow-1">
                                 <h6 class="fw-bold text-dark mb-0">@trabajador.Nombre</h6>
                                 <div class="d-flex flex-wrap align-items-center mt-1 gap-2">
-                                    <span class="badge small" style="background-color: #0A1128; color: #ffffff;">@trabajador.Oficio</span>
+                                    <span class="badge cb-role-badge small">@trabajador.Oficio</span>
                                     @if (!string.IsNullOrEmpty(trabajador.Ciudad))
                                     {
                                         <span class="small text-muted fw-semibold">📍 @trabajador.Ciudad</span>
@@ -73,7 +73,7 @@
 
                             <!-- Tarifa -->
                             <div class="text-end align-self-start">
-                                <span class="fw-bold text-success" style="font-size: 1.1rem;">$@trabajador.Salario <span class="small text-muted fw-normal">/ hr</span></span>
+                                <span class="fw-bold text-success cb-price">$@trabajador.Salario <span class="small text-muted fw-normal">/ hr</span></span>
                             </div>
                         </div>
 
@@ -90,8 +90,7 @@
                             }
                         </div>
 
-                        <button class="btn btn-sm w-100 fw-bold text-white shadow-sm mt-3"
-                                style="background-color: #0A1128; border-radius: 8px; padding: 10px;"
+                        <button class="btn btn-cb-primary w-100 fw-bold text-white shadow-sm mt-3"
                                 @onclick="() => IrAMensajeria(trabajador)">
                             Contratar / Mensajear
                         </button>
@@ -102,29 +101,29 @@
     }
     else
     {
-        <div class="configuracion-panel" style="padding-bottom: 20px;">
-            <div class="card border-0 shadow-sm p-3 mb-3" style="border-radius: 16px; background: #ffffff; border-left: 4px solid #0A1128 !important;">
-                <h5 class="fw-bold small mb-3" style="color: #0A1128;">DATOS DE LA COMPAÑÍA</h5>
-                <p class="form-control-plaintext border-bottom py-1 fw-semibold" style="color: #0A1128;">@perfil.NombreEmpresa</p>
+        <div class="configuracion-panel pb-3">
+            <div class="card cb-section-card cb-section-card-navy border-0 shadow-sm p-3 mb-3">
+                <h5 class="fw-bold small mb-3 text-navy">Datos de la compañía</h5>
+                <p class="form-control-plaintext border-bottom py-1 fw-semibold text-navy">@perfil.NombreEmpresa</p>
                 <div class="d-flex justify-content-end mt-2">
-                    <button class="btn btn-sm fw-bold text-white" style="background-color: #0A1128; border-radius: 8px;" @onclick="IrAEditarPerfil">Editar Perfil</button>
+                    <button class="btn btn-cb-primary fw-bold text-white" @onclick="IrAEditarPerfil">Editar perfil</button>
                 </div>
             </div>
             
-            <div class="card border-0 shadow-sm p-3 mb-3" style="border-radius: 16px; background: #ffffff; border-left: 4px solid #D4AF37 !important;">
-                <h5 class="fw-bold small mb-0">GARANTÍA DE PROTECCIÓN</h5>
+            <div class="card cb-section-card cb-section-card-gold border-0 shadow-sm p-3 mb-3">
+                <h5 class="fw-bold small mb-0">Garantía de protección</h5>
                 <p class="text-muted small mb-3">Protección activa contra ausencias.</p>
-                <button class="btn btn-sm fw-bold" style="background-color: #f8f9fa; color: #0A1128; border: 1px solid #0A1128; border-radius: 8px;" @onclick="IrAReportarAusencia">Reportar Ausencia</button>
+                <button class="btn btn-cb-secondary fw-bold" @onclick="IrAReportarAusencia">Reportar ausencia</button>
             </div>
 
-            <div class="card border-0 shadow-sm p-3 mb-3" style="border-radius: 16px; background: #ffffff;">
-                <h5 class="fw-bold small mb-3" style="color: #0A1128;">ELIMINACION DE LA CUENTA</h5>
-                <button class="btn btn-sm fw-bold btn-outline-danger w-100 mb-3" style="border-radius: 8px;" @onclick="EliminarCuentaPermanentemente">
+            <div class="card cb-section-card border-0 shadow-sm p-3 mb-3">
+                <h5 class="fw-bold small mb-3 text-navy">Cuenta</h5>
+                <button class="btn btn-sm fw-bold btn-outline-danger w-100 mb-3" @onclick="EliminarCuentaPermanentemente">
                     Eliminar cuenta permanentemente
                 </button>
             
-                <h5 class="fw-bold small mb-3" style="color: #0A1128;">SESIÓN</h5>
-                <button class="btn btn-sm fw-bold btn-outline-secondary w-100" style="border-radius: 8px;" @onclick="CerrarSesion">
+                <h5 class="fw-bold small mb-3 text-navy">Sesión</h5>
+                <button class="btn btn-sm fw-bold btn-outline-secondary w-100" @onclick="CerrarSesion">
                     Cerrar sesión
                 </button>
             </div>

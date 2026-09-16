@@ -61,6 +61,18 @@ public sealed class SignalRConnectionTests
         Assert.Contains("SignalR queda como canal de recepción en tiempo real", messagingService);
     }
 
+    [Fact]
+    public void ApiDelivery_IsNotCoupledToRequestCancellation()
+    {
+        var controller = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders.API", "Controllers", "MensajesController.cs")));
+
+        Assert.Contains("await _messageDeliveryService.DeliverAsync(response);", controller);
+        Assert.DoesNotContain(
+            "await _messageDeliveryService.DeliverAsync(response, cancellationToken);",
+            controller);
+    }
+
     private static string FindProjectPath(string projectFileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

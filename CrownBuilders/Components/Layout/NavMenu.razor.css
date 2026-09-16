@@ -24,6 +24,44 @@
     font-size: 1.1rem;
 }
 
+.cb-brand {
+    gap: 0.65rem;
+}
+
+.cb-brand-logo {
+    height: 2.25rem;
+    object-fit: contain;
+    width: auto;
+}
+
+.cb-brand-name {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.container-fluid > a:last-child {
+    align-items: center;
+    background-color: transparent;
+    border: 1px solid #C5A059;
+    border-radius: 50%;
+    color: #C5A059;
+    display: flex;
+    font-size: 1.35rem;
+    font-weight: 700;
+    height: 2.75rem;
+    justify-content: center;
+    text-decoration: none;
+    transition: background-color 180ms ease, color 180ms ease;
+    width: 2.75rem;
+}
+
+.container-fluid > a:last-child:hover,
+.container-fluid > a:last-child:focus-visible {
+    background-color: #C5A059;
+    color: #0A192F;
+}
+
 .bi {
     display: inline-block;
     position: relative;

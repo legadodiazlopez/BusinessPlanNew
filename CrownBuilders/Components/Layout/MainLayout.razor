@@ -13,11 +13,10 @@
                 <ChildContent>
                     @Body
                 </ChildContent>
-                <ErrorContent Context="ex">
-                    <div style="background-color: #ffdddd; padding: 20px; border: 2px solid red; border-radius: 10px; margin-top: 20px;">
-                        <h4 style="color: red; font-weight: bold;">🚨 Error Interno Detectado 🚨</h4>
-                        <p><strong>Mensaje:</strong> @ex.Message</p>
-                        <p style="font-size: 11px; overflow-wrap: break-word;"><strong>Ruta:</strong> @ex.StackTrace</p>
+                <ErrorContent>
+                    <div class="cb-error-state" role="alert">
+                        <h4>Algo salió mal</h4>
+                        <p>La pantalla no pudo cargarse correctamente. Intenta volver a abrirla.</p>
                     </div>
                 </ErrorContent>
             </ErrorBoundary>

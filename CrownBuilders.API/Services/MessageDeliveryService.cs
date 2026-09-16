@@ -59,7 +59,20 @@ public sealed class MessageDeliveryService
             return;
         }
 
-        var recipientToken = await GetRecipientTokenAsync(recipient, cancellationToken);
+        string? recipientToken;
+        try
+        {
+            recipientToken = await GetRecipientTokenAsync(recipient, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "No se pudo consultar el token push del destinatario del mensaje {MessageId}.",
+                message.Id);
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(recipientToken))
         {
             return;
