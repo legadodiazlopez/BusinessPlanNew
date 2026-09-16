@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using System.Text;
 using CrownBuilders.Services;
 using Xunit;
@@ -7,6 +8,29 @@ namespace CrownBuilders.Tests;
 
 public sealed class WorkerProfileUpdateTests
 {
+    [Fact]
+    public void MapearTrabajadorParaCache_PreservesSalaryFromRemoteDirectory()
+    {
+        var mappingMethod = typeof(DatabaseHelper).GetMethod(
+            "MapearTrabajadorParaCache",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(mappingMethod);
+
+        var mappedWorker = Assert.IsType<CrownBuilders.Trabajador>(mappingMethod.Invoke(
+            null,
+            [new CrownBuilders.Models.Trabajador
+            {
+                Id = 17,
+                Nombre = "Mario",
+                Salario = 50000,
+                FotoPerfil = "foto-perfil"
+            }]));
+
+        Assert.Equal(50000, mappedWorker.Salario);
+        Assert.Equal("foto-perfil", mappedWorker.FotoPerfil);
+    }
+
     [Fact]
     public async Task ObtenerTrabajadorAsync_PreservesTheSalaryFromTheApi()
     {

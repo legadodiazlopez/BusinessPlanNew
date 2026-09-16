@@ -226,41 +226,13 @@ namespace CrownBuilders
                         // Sincronizar con la base de datos local de forma optimizada usando InsertOrReplace
                         foreach (var trabajadorApi in trabajadoresApi)
                         {
-                            var trabajadorDB = new Trabajador
-                            {
-                                Id = trabajadorApi.Id,
-                                Nombre = trabajadorApi.Nombre,
-                                Oficio = trabajadorApi.Oficio,
-                                Ciudad = trabajadorApi.Ciudad,
-                                Experiencia = trabajadorApi.Experiencia ?? 0,
-                                Correo = trabajadorApi.Correo,
-                                Telefono = trabajadorApi.Telefono,
-                                Password = trabajadorApi.Password,
-                                TieneVehiculo = trabajadorApi.TieneVehiculo,
-                                TieneHerramientas = trabajadorApi.TieneHerramientas,
-                                EstaDisponible = trabajadorApi.EstaDisponible ?? true,
-                                FcmToken = trabajadorApi.FcmToken
-                            };
+                            var trabajadorDB = MapearTrabajadorParaCache(trabajadorApi);
                             await _db.InsertOrReplaceAsync(trabajadorDB).ConfigureAwait(false);
                         }
                         System.Diagnostics.Debug.WriteLine("[TRABAJADORES] Sincronización local completada");
 
                         // Retornar directamente desde Azure (foco en nube)
-                        return trabajadoresApi.Select(t => new Trabajador
-                        {
-                            Id = t.Id,
-                            Nombre = t.Nombre,
-                            Oficio = t.Oficio,
-                            Ciudad = t.Ciudad,
-                            Experiencia = t.Experiencia ?? 0,
-                            Correo = t.Correo,
-                            Telefono = t.Telefono,
-                            Password = t.Password,
-                            TieneVehiculo = t.TieneVehiculo,
-                            TieneHerramientas = t.TieneHerramientas,
-                            EstaDisponible = t.EstaDisponible ?? true,
-                            FcmToken = t.FcmToken
-                        }).ToList();
+                        return trabajadoresApi.Select(MapearTrabajadorParaCache).ToList();
                     }
                 }
 
@@ -280,6 +252,30 @@ namespace CrownBuilders
 
             // Si falla la API, usar datos locales (caché offline)
             return await _db.Table<Trabajador>().ToListAsync().ConfigureAwait(false);
+        }
+
+        private static Trabajador MapearTrabajadorParaCache(
+            CrownBuilders.Models.Trabajador trabajadorApi)
+        {
+            ArgumentNullException.ThrowIfNull(trabajadorApi);
+
+            return new Trabajador
+            {
+                Id = trabajadorApi.Id,
+                FotoPerfil = trabajadorApi.FotoPerfil,
+                Nombre = trabajadorApi.Nombre,
+                Oficio = trabajadorApi.Oficio,
+                Ciudad = trabajadorApi.Ciudad,
+                Experiencia = trabajadorApi.Experiencia ?? 0,
+                Salario = trabajadorApi.Salario,
+                Correo = trabajadorApi.Correo,
+                Telefono = trabajadorApi.Telefono,
+                Password = trabajadorApi.Password,
+                TieneVehiculo = trabajadorApi.TieneVehiculo,
+                TieneHerramientas = trabajadorApi.TieneHerramientas,
+                EstaDisponible = trabajadorApi.EstaDisponible ?? true,
+                FcmToken = trabajadorApi.FcmToken
+            };
         }
 
         public static async Task<List<CrownBuilders.Components.Pages.CompaniasDisponibles.Compania>> ObtenerCompaniasAsync(
