@@ -45,9 +45,12 @@
 
     <!-- ENTRADA DE TEXTO -->
     <div class="bg-white p-3 shadow-lg">
+        <div class="small text-muted mb-2">
+            Estado: @(chatConectado ? "Conectado en tiempo real" : estadoChat)
+        </div>
         <div class="input-group">
             <input type="text" class="form-control" placeholder="Escribe un mensaje..." @bind="mensajeNuevo" @bind:event="oninput" @onkeyup="HandleKeyUp" />
-            <button class="btn text-white fw-bold" style="background-color: #D4AF37;" @onclick="EnviarMensaje">Enviar</button>
+            <button class="btn text-white fw-bold" style="background-color: #D4AF37;" disabled="@(!chatConectado)" @onclick="EnviarMensaje">Enviar</button>
         </div>
     </div>
 </div>
@@ -60,9 +63,12 @@
     private string? mensajeNuevo;
     
     private string nombreTrabajador = "Trabajador";
-    private int companiaIdActual = 1; // Ajusta esto según tu lógica de sesión real
-    private int trabajadorIdSimulado = 1;
+    private int companiaIdActual;
+    private int trabajadorIdSimulado;
     private int conversationId;
+    private bool chatConectado;
+    private bool chatInicioIntentado;
+    private string estadoChat = "Conectando...";
 
     public class MensajeUI
     {
@@ -75,6 +81,7 @@
     protected override async Task OnInitializedAsync()
     {
         messages.Clear();
+        await ApiService.RestoreAuthTokenAsync();
 
         if (!string.IsNullOrEmpty(NombreTrabajadorRoute))
         {
@@ -86,17 +93,41 @@
             trabajadorIdSimulado = trabajadorIdFromRoute;
         }
 
+        companiaIdActual = ApiService.AuthenticatedUserId ?? 0;
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHAT] ID de compañía autenticada: {companiaIdActual}");
+
+        if (companiaIdActual <= 0 || trabajadorIdSimulado <= 0)
+        {
+            messages.Add(new MensajeUI
+            {
+                Remitente = "Sistema",
+                Texto = "No se pudo identificar a los participantes de esta conversación.",
+                EsMio = false
+            });
+            return;
+        }
+
         try
         {
             var conversation = await ApiService.EnsureConversationAsync(
                 trabajadorIdSimulado,
                 companiaIdActual);
             conversationId = conversation?.Id ?? 0;
-            MessagingService.MessageReceived += OnMessageReceivedAsync;
+            System.Diagnostics.Debug.WriteLine($"[CHAT] Conversación compañía preparada: {conversationId}");
+            if (conversationId > 0)
+            {
+                MessagingService.MessageReceived += OnMessageReceivedAsync;
+            }
         }
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "No se pudo preparar la conversación de mensajería.");
+        }
+
+        if (conversationId <= 0)
+        {
+            estadoChat = "No se pudo validar la sesión. Inicia sesión nuevamente.";
         }
 
         try
@@ -132,25 +163,44 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && conversationId > 0)
+        if (conversationId > 0 && !chatInicioIntentado)
         {
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    await MessagingService.StartAsync(conversationId);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning(ex, "No se pudo conectar al servidor de mensajería.");
-                }
-            });
+                chatInicioIntentado = true;
+                System.Diagnostics.Debug.WriteLine($"[CHAT] Iniciando SignalR compañía para conversación {conversationId}");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await MessagingService.StartAsync(conversationId, cts.Token);
+                chatConectado = true;
+                estadoChat = "Conectado en tiempo real";
+                System.Diagnostics.Debug.WriteLine("[CHAT] SignalR compañía conectado");
+            }
+            catch (Exception ex)
+            {
+                chatConectado = false;
+                estadoChat = "No se pudo conectar. Inicia sesión nuevamente.";
+                Logger.LogWarning(ex, "No se pudo conectar al servidor de mensajería.");
+            }
+
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     private async Task OnMessageReceivedAsync(MensajeApiResponse message)
     {
-        await DatabaseHelper.GuardarMensajeRemotoAsync(message).ConfigureAwait(false);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHAT] Mensaje recibido por compañía: {message.ClientMessageId}");
+
+        try
+        {
+            await DatabaseHelper.GuardarMensajeRemotoAsync(message).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(
+                exception,
+                "No se pudo guardar el mensaje remoto en la caché local de la compañía.");
+        }
 
         await InvokeAsync(() =>
         {
@@ -172,7 +222,7 @@
         });
     }
     
-    private void Volver() => Navigation.NavigateTo("/trabajadores-disponibles"); // Ajusta esta ruta a donde debe regresar la compañía
+    private void Volver() => Navigation.NavigateTo("/portal-compania");
 
     private async Task ReportarCuenta()
     {
@@ -184,11 +234,17 @@
     
     private async Task EnviarMensaje()
     {
+        if (!chatConectado || string.IsNullOrWhiteSpace(mensajeNuevo))
+        {
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(mensajeNuevo))
         {
             var textoAEnviar = mensajeNuevo;
             mensajeNuevo = string.Empty;
             var clientMessageId = Guid.NewGuid().ToString("D");
+            var envioRemotoConfirmado = false;
 
             try
             {
@@ -210,6 +266,7 @@
                         conversationId,
                         Guid.Parse(clientMessageId),
                         textoAEnviar).ConfigureAwait(false);
+                    envioRemotoConfirmado = true;
                     await DatabaseHelper.MarcarMensajeSincronizadoAsync(
                         clientMessageId,
                         response.Id,
@@ -218,20 +275,30 @@
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CHAT] Error en envío de compañía: {ex.GetType().Name}: {ex.Message}");
                 Logger?.LogError($"[CHAT COMPAÑÍA] Error guardando mensaje localmente: {ex.Message}");
             }
 
-            await InvokeAsync(() =>
+            if (envioRemotoConfirmado)
             {
-                messages.Add(new MensajeUI
+                await InvokeAsync(() =>
                 {
-                    ClientMessageId = clientMessageId,
-                    Remitente = "Tú",
-                    Texto = textoAEnviar,
-                    EsMio = true
+                    if (messages.Any(item => item.ClientMessageId == clientMessageId))
+                    {
+                        return;
+                    }
+
+                    messages.Add(new MensajeUI
+                    {
+                        ClientMessageId = clientMessageId,
+                        Remitente = "Tú",
+                        Texto = textoAEnviar,
+                        EsMio = true
+                    });
+                    StateHasChanged();
                 });
-                StateHasChanged();
-            });
+            }
 
         }
     }

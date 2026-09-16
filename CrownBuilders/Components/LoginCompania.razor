@@ -118,7 +118,7 @@
             mensajeError = "";
             cargando = true;
 
-            System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Intentando entrar con -> Correo: '{correoLimpio}', Pass: '{password}'");
+            System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Intentando entrar con -> Correo: '{correoLimpio}'");
 
             // Ejecución asíncrona segura envuelta con Task.Run y control de cancelación para prevenir bloqueos de sockets en Azure
             var authResponse = await Task.Run(async () =>
@@ -138,40 +138,37 @@
                     System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Token de autenticación establecido");
                 }
                 
-                // Sincronizar datos localmente para offline en segundo plano protegido
-                _ = Task.Run(async () =>
+                // Sincronizar el perfil antes de entrar al portal para disponer del ID real
+                try
                 {
-                    try
+                    var companiaDesdeAzure = await ApiService.ObtenerCompaniaAsync(authResponse.Id);
+                    if (companiaDesdeAzure != null)
                     {
-                        var companiaDesdeAzure = await ApiService.ObtenerCompaniaAsync(authResponse.Id);
-                        if (companiaDesdeAzure != null)
+                        var companiaLocal = new PerfilCompania
                         {
-                            var companiaLocal = new PerfilCompania
-                            {
-                                Id = companiaDesdeAzure.Id,
-                                NombreEmpresa = companiaDesdeAzure.NombreEmpresa,
-                                Especialidad = companiaDesdeAzure.Especialidad,
-                                Ciudad = companiaDesdeAzure.Ciudad,
-                                Correo = companiaDesdeAzure.Correo,
-                                Telefono = companiaDesdeAzure.Telefono,
-                                Password = companiaDesdeAzure.Password,
-                                FormaPago = companiaDesdeAzure.FormaPago,
-                                MontoPago = companiaDesdeAzure.MontoPago.ToString() ?? "0",
-                                NombreTitular = companiaDesdeAzure.NombreTitular,
-                                NumeroTarjeta = companiaDesdeAzure.NumeroTarjeta,
-                                FechaExpiracion = companiaDesdeAzure.FechaExpiracion,
-                                CVC = companiaDesdeAzure.CVC,
-                                AceptaTerminos = companiaDesdeAzure.AceptaTerminos
-                            };
-                            await DatabaseHelper.GuardarPerfilCompaniaAsync(companiaLocal);
-                            System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Datos sincronizados localmente");
-                        }
+                            Id = companiaDesdeAzure.Id,
+                            NombreEmpresa = companiaDesdeAzure.NombreEmpresa,
+                            Especialidad = companiaDesdeAzure.Especialidad,
+                            Ciudad = companiaDesdeAzure.Ciudad,
+                            Correo = companiaDesdeAzure.Correo,
+                            Telefono = companiaDesdeAzure.Telefono,
+                            Password = companiaDesdeAzure.Password,
+                            FormaPago = companiaDesdeAzure.FormaPago,
+                            MontoPago = companiaDesdeAzure.MontoPago.ToString() ?? "0",
+                            NombreTitular = companiaDesdeAzure.NombreTitular,
+                            NumeroTarjeta = companiaDesdeAzure.NumeroTarjeta,
+                            FechaExpiracion = companiaDesdeAzure.FechaExpiracion,
+                            CVC = companiaDesdeAzure.CVC,
+                            AceptaTerminos = companiaDesdeAzure.AceptaTerminos
+                        };
+                        await DatabaseHelper.GuardarPerfilCompaniaAsync(companiaLocal);
+                        System.Diagnostics.Debug.WriteLine("[LOGIN COMPAÑÍA] Datos sincronizados localmente");
                     }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Error sincronizando datos localmente: {ex.Message}");
-                    }
-                });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[LOGIN COMPAÑÍA] Error sincronizando datos localmente: {ex.Message}");
+                }
 
                 // Captura y envío blindado del token de notificaciones (FCM)
                 _ = Task.Run(async () =>

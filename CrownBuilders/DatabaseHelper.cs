@@ -534,15 +534,11 @@ namespace CrownBuilders
             // Primero intentar obtener de la API (fuente de verdad)
             try
             {
-                using var client = new HttpClient();
-                client.BaseAddress = new Uri(_apiBaseUrl);
-                client.Timeout = TimeSpan.FromSeconds(30);
-
                 var apiUrl = $"mensajes/historial/{trabajadorId}/{companiaId}";
                 var fullUrl = $"{_apiBaseUrl}{apiUrl}";
                 System.Diagnostics.Debug.WriteLine($"[MENSAJES] URL completa: {fullUrl}");
 
-                var response = await client.GetAsync(apiUrl).ConfigureAwait(false);
+                var response = await _httpClient.GetAsync(apiUrl).ConfigureAwait(false);
                 System.Diagnostics.Debug.WriteLine($"[MENSAJES] Respuesta API: {response.StatusCode}");
                 
                 if (response.IsSuccessStatusCode)

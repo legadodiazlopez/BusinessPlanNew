@@ -172,13 +172,13 @@
             
             if (response.IsSuccessStatusCode)
             {
-                var companiasNube = await response.Content.ReadFromJsonAsync<List<Compania>>();
+                var companiasNube = await response.Content.ReadFromJsonAsync<List<CrownBuilders.Models.Compania>>();
                 System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Compañías recibidas: {companiasNube?.Count ?? 0}");
                 
                 if (companiasNube != null && companiasNube.Any())
                 {
                     // Reemplazamos la caché local con la lista fresca de la base de datos central
-                    listaCompanias = companiasNube;
+                    listaCompanias = companiasNube.Select(MapearCompania).ToList();
                     System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Lista actualizada con {companiasNube.Count} compañías");
                 }
                 else
@@ -233,10 +233,33 @@
     private void AbrirConfiguracion() => mostrarConfig = true;
     private void CerrarModal() => mostrarConfig = false;
 
-    private void ContactarCompania(Compania compania) 
+    public static Compania MapearCompania(CrownBuilders.Models.Compania compania)
     {
-        Navigation.NavigateTo($"/mensajeria-trabajador/{Uri.EscapeDataString(compania.Nombre)}/{compania.Id}");
+        ArgumentNullException.ThrowIfNull(compania);
+
+        return new Compania
+        {
+            Id = compania.Id,
+            Nombre = compania.NombreEmpresa ?? string.Empty,
+            Ciudad = compania.Ciudad ?? string.Empty,
+            Especialidad = compania.Especialidad ?? string.Empty,
+            MontoPago = (double)compania.MontoPago,
+            Puntualidad = 5,
+            Pagos = 5,
+            Trato = 5
+        };
     }
+
+    public static string ConstruirRutaMensajeria(Compania compania)
+    {
+        ArgumentNullException.ThrowIfNull(compania);
+
+        return string.IsNullOrWhiteSpace(compania.Nombre)
+            ? $"/mensajeria-trabajador/compania/{compania.Id}"
+            : $"/mensajeria-trabajador/{Uri.EscapeDataString(compania.Nombre)}/{compania.Id}";
+    }
+
+    private void ContactarCompania(Compania compania) => Navigation.NavigateTo(ConstruirRutaMensajeria(compania));
 
     private void EditarPerfil() => Navigation.NavigateTo("/editar-perfil");
     private void CerrarSesion() => Navigation.NavigateTo("/login-trabajador");

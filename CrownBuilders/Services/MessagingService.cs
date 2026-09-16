@@ -27,6 +27,14 @@ public sealed class MessagingService : IAsyncDisposable
             throw new ArgumentOutOfRangeException(nameof(conversationId));
         }
 
+        System.Diagnostics.Debug.WriteLine($"[CHAT] StartAsync solicitado para conversación {conversationId}");
+        await _apiService.RestoreAuthTokenAsync().ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(_apiService.AuthToken))
+        {
+            throw new InvalidOperationException("La sesión no está autenticada. Inicia sesión nuevamente.");
+        }
+
         await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -35,13 +43,24 @@ public sealed class MessagingService : IAsyncDisposable
             if (_hubConnection.State == HubConnectionState.Disconnected)
             {
                 await _hubConnection.StartAsync(cancellationToken).ConfigureAwait(false);
+                System.Diagnostics.Debug.WriteLine($"[CHAT] Hub conectado: {_hubConnection.State}");
             }
 
             _conversationId = conversationId;
-            await _hubConnection.InvokeAsync(
-                "JoinConversation",
-                conversationId,
-                cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _hubConnection.InvokeAsync(
+                    "JoinConversation",
+                    conversationId,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CHAT] Error al unirse a la conversación {conversationId}: {exception}");
+                throw;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[CHAT] Unido a conversación {conversationId}");
             await SyncPendingAsync(conversationId, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -61,15 +80,40 @@ public sealed class MessagingService : IAsyncDisposable
             throw new InvalidOperationException("SignalR no está conectado.");
         }
 
-        return await _hubConnection.InvokeAsync<MensajeApiResponse>(
-            "SendMessage",
-            new
-            {
-                ConversationId = conversationId,
-                ClientMessageId = clientMessageId,
-                Text = text
-            },
-            cancellationToken).ConfigureAwait(false);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHAT] Enviando mensaje remoto. ConversationId={conversationId}, ClientMessageId={clientMessageId}");
+
+        try
+        {
+#if ANDROID
+            // En Android el endpoint HTTP envía el mensaje y SignalR queda como canal de recepción en tiempo real.
+            return await _apiService.EnviarMensajeAsync(
+                conversationId,
+                clientMessageId,
+                text,
+                cancellationToken).ConfigureAwait(false);
+#else
+            var response = await _hubConnection.InvokeAsync<MensajeApiResponse>(
+                "SendMessage",
+                new
+                {
+                    ConversationId = conversationId,
+                    ClientMessageId = clientMessageId,
+                    Text = text
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            System.Diagnostics.Debug.WriteLine(
+                $"[CHAT] Mensaje remoto confirmado. MessageId={response.Id}, ConversationId={response.ConversationId}");
+            return response;
+#endif
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CHAT] Error enviando mensaje remoto: {exception.GetType().Name}: {exception.Message}");
+            throw;
+        }
     }
 
     private HubConnection CreateConnection()
@@ -84,7 +128,12 @@ public sealed class MessagingService : IAsyncDisposable
             {
                 options.AccessTokenProvider = () => Task.FromResult(_apiService.AuthToken);
                 options.HttpMessageHandlerFactory = _ => handler;
-                options.Transports = HttpTransportType.WebSockets;
+#if ANDROID
+                // En el emulador Android el handshake WebSocket completa, pero las invocaciones no reciben respuesta.
+                options.Transports = HttpTransportType.LongPolling;
+#else
+                options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+#endif
             })
             .WithAutomaticReconnect(new[]
             {
@@ -98,6 +147,11 @@ public sealed class MessagingService : IAsyncDisposable
             .Build();
 
         connection.On<MensajeApiResponse>("MessageReceived", HandleMessageReceivedAsync);
+        connection.Reconnecting += exception =>
+        {
+            System.Diagnostics.Debug.WriteLine($"[CHAT] SignalR reconectando: {exception?.Message ?? "sin detalle"}");
+            return Task.CompletedTask;
+        };
         connection.Reconnected += async _ =>
         {
             if (_conversationId is int conversationId)
@@ -105,6 +159,11 @@ public sealed class MessagingService : IAsyncDisposable
                 await connection.InvokeAsync("JoinConversation", conversationId).ConfigureAwait(false);
                 await SyncPendingAsync(conversationId).ConfigureAwait(false);
             }
+        };
+        connection.Closed += exception =>
+        {
+            System.Diagnostics.Debug.WriteLine($"[CHAT] SignalR cerrado: {exception?.Message ?? "sin detalle"}");
+            return Task.CompletedTask;
         };
 
         return connection;

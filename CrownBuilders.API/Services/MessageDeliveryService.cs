@@ -40,6 +40,10 @@ public sealed class MessageDeliveryService
             await _hubContext.Clients
                 .Group(ChatHub.GetConversationGroup(message.ConversationId))
                 .SendAsync("MessageReceived", message, cancellationToken);
+            _logger.LogInformation(
+                "Mensaje enviado al grupo SignalR. MessageId={MessageId}, ConversationId={ConversationId}",
+                message.Id,
+                message.ConversationId);
         }
         catch (Exception exception)
         {

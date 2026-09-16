@@ -1,6 +1,7 @@
 @page "/mensajeria-trabajador"
 @page "/mensajeria-trabajador/{NombreCompaniaRoute}"
 @page "/mensajeria-trabajador/{NombreCompaniaRoute}/{CompaniaIdRoute}"
+@page "/mensajeria-trabajador/compania/{CompaniaIdRoute}"
 @using Microsoft.Extensions.Logging
 @using System.Net.Http.Json
 @implements IAsyncDisposable
@@ -46,9 +47,12 @@
 
     <!-- ENTRADA DE TEXTO -->
     <div class="bg-white p-3 shadow-lg">
+        <div class="small text-muted mb-2">
+            Estado: @(chatConectado ? "Conectado en tiempo real" : estadoChat)
+        </div>
         <div class="input-group">
             <input type="text" class="form-control" placeholder="Escribe un mensaje..." @bind="mensajeNuevo" @bind:event="oninput" @onkeyup="HandleKeyUp" />
-            <button class="btn text-white fw-bold" style="background-color: #D4AF37;" @onclick="EnviarMensaje">Enviar</button>
+            <button class="btn text-white fw-bold" style="background-color: #D4AF37;" disabled="@(!chatConectado)" @onclick="EnviarMensaje">Enviar</button>
         </div>
     </div>
 </div>
@@ -118,9 +122,12 @@
     private int puntajePagos = 5;
     private int puntajeTrato = 5;
     private string? comentarioResena;
-    private int trabajadorIdActual = 1;
-    private int companiaIdSimulada = 1;
+    private int trabajadorIdActual;
+    private int companiaIdSimulada;
     private int conversationId;
+    private bool chatConectado;
+    private bool chatInicioIntentado;
+    private string estadoChat = "Conectando...";
 
     // Cliente estático para reseñas (evita agotar sockets como en la compañía)
     private static readonly HttpClient _httpClientResenas = new HttpClient(new HttpClientHandler
@@ -145,21 +152,11 @@
     protected override async Task OnInitializedAsync()
     {
         messages.Clear();
+        await ApiService.RestoreAuthTokenAsync();
 
-        // Obtener el ID del trabajador autenticado del perfil local
-        try
-        {
-            var trabajadores = await DatabaseHelper.ObtenerTrabajadoresAsync();
-            if (trabajadores != null && trabajadores.Count > 0)
-            {
-                trabajadorIdActual = trabajadores[0].Id;
-                System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Trabajador ID desde perfil local: {trabajadorIdActual}");
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Error obteniendo perfil de trabajador: {ex.Message}");
-        }
+        trabajadorIdActual = ApiService.AuthenticatedUserId ?? 0;
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHAT] ID de trabajador autenticado: {trabajadorIdActual}");
 
         if (!string.IsNullOrEmpty(NombreCompaniaRoute))
         {
@@ -171,17 +168,53 @@
             companiaIdSimulada = companiaIdFromRoute;
         }
 
+        if (string.IsNullOrWhiteSpace(NombreCompaniaRoute) && companiaIdSimulada > 0)
+        {
+            try
+            {
+                var compania = await DatabaseHelper.ObtenerCompaniaPorIdAsync(companiaIdSimulada);
+                if (!string.IsNullOrWhiteSpace(compania?.NombreEmpresa))
+                {
+                    nombreCompania = compania.NombreEmpresa;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "No se pudo recuperar el nombre de la compañía para la conversación.");
+            }
+        }
+
+        if (trabajadorIdActual <= 0 || companiaIdSimulada <= 0)
+        {
+            messages.Add(new MensajeUI
+            {
+                Remitente = "Sistema",
+                Texto = "No se pudo identificar a los participantes de esta conversación.",
+                EsMio = false
+            });
+            return;
+        }
+
         try
         {
             var conversation = await ApiService.EnsureConversationAsync(
                 trabajadorIdActual,
                 companiaIdSimulada);
             conversationId = conversation?.Id ?? 0;
-            MessagingService.MessageReceived += OnMessageReceivedAsync;
+            System.Diagnostics.Debug.WriteLine($"[CHAT] Conversación trabajador preparada: {conversationId}");
+            if (conversationId > 0)
+            {
+                MessagingService.MessageReceived += OnMessageReceivedAsync;
+            }
         }
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "No se pudo preparar la conversación de mensajería.");
+        }
+
+        if (conversationId <= 0)
+        {
+            estadoChat = "No se pudo validar la sesión. Inicia sesión nuevamente.";
         }
 
         try
@@ -223,25 +256,44 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && conversationId > 0)
+        if (conversationId > 0 && !chatInicioIntentado)
         {
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    await MessagingService.StartAsync(conversationId);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogWarning(ex, "No se pudo conectar al servidor de mensajería.");
-                }
-            });
+                chatInicioIntentado = true;
+                System.Diagnostics.Debug.WriteLine($"[CHAT] Iniciando SignalR trabajador para conversación {conversationId}");
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await MessagingService.StartAsync(conversationId, cts.Token);
+                chatConectado = true;
+                estadoChat = "Conectado en tiempo real";
+                System.Diagnostics.Debug.WriteLine("[CHAT] SignalR trabajador conectado");
+            }
+            catch (Exception ex)
+            {
+                chatConectado = false;
+                estadoChat = "No se pudo conectar. Inicia sesión nuevamente.";
+                Logger.LogWarning(ex, "No se pudo conectar al servidor de mensajería.");
+            }
+
+            await InvokeAsync(StateHasChanged);
         }
     }
 
     private async Task OnMessageReceivedAsync(MensajeApiResponse message)
     {
-        await DatabaseHelper.GuardarMensajeRemotoAsync(message).ConfigureAwait(false);
+        System.Diagnostics.Debug.WriteLine(
+            $"[CHAT] Mensaje recibido por trabajador: {message.ClientMessageId}");
+
+        try
+        {
+            await DatabaseHelper.GuardarMensajeRemotoAsync(message).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogWarning(
+                exception,
+                "No se pudo guardar el mensaje remoto en la caché local del trabajador.");
+        }
 
         await InvokeAsync(() =>
         {
@@ -311,11 +363,17 @@
     
     private async Task EnviarMensaje()
     {
+        if (!chatConectado || string.IsNullOrWhiteSpace(mensajeNuevo))
+        {
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(mensajeNuevo))
         {
             var textoAEnviar = mensajeNuevo;
             mensajeNuevo = string.Empty;
             var clientMessageId = Guid.NewGuid().ToString("D");
+            var envioRemotoConfirmado = false;
 
             try
             {
@@ -337,6 +395,7 @@
                         conversationId,
                         Guid.Parse(clientMessageId),
                         textoAEnviar).ConfigureAwait(false);
+                    envioRemotoConfirmado = true;
                     await DatabaseHelper.MarcarMensajeSincronizadoAsync(
                         clientMessageId,
                         response.Id,
@@ -345,20 +404,30 @@
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CHAT] Error en envío de trabajador: {ex.GetType().Name}: {ex.Message}");
                 Logger?.LogError($"[CHAT] Error guardando mensaje localmente: {ex.Message}");
             }
 
-            await InvokeAsync(() =>
+            if (envioRemotoConfirmado)
             {
-                messages.Add(new MensajeUI
+                await InvokeAsync(() =>
                 {
-                    ClientMessageId = clientMessageId,
-                    Remitente = "Tú",
-                    Texto = textoAEnviar,
-                    EsMio = true
+                    if (messages.Any(item => item.ClientMessageId == clientMessageId))
+                    {
+                        return;
+                    }
+
+                    messages.Add(new MensajeUI
+                    {
+                        ClientMessageId = clientMessageId,
+                        Remitente = "Tú",
+                        Texto = textoAEnviar,
+                        EsMio = true
+                    });
+                    StateHasChanged();
                 });
-                StateHasChanged();
-            });
+            }
         }
     }
 

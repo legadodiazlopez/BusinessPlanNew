@@ -366,5 +366,7 @@ FodyWeavers.xsd
 /spec/mensajeria-signalr/
 
 # Salidas temporales de compilación/verificación de Codex
-.codex-test-output/
-.codex-test-obj/
+.codex-test-output*/
+.codex-test-obj*/
+.codex-android-output*/
+.codex-release-*/

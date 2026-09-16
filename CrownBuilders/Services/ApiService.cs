@@ -5,15 +5,20 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using CrownBuilders.Models;
+using Microsoft.Maui.Storage;
 
 namespace CrownBuilders.Services
 {
     public class ApiService
     {
+        private const string AuthTokenStorageKey = "crownbuilders.auth-token";
+        private const string AuthenticatedUserIdStorageKey = "crownbuilders.auth-user-id";
         private readonly HttpClient _httpClient;
         private string? _authToken;
+        private int? _authenticatedUserId;
 
         public string? AuthToken => _authToken;
+        public int? AuthenticatedUserId => _authenticatedUserId;
 
         // Producción/Azure:
         // private const string BaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
@@ -57,11 +62,62 @@ namespace CrownBuilders.Services
             }
         }
 
+        public async Task SetAuthTokenAsync(string? token)
+        {
+            SetAuthToken(token);
+
+            try
+            {
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    SecureStorage.Default.Remove(AuthTokenStorageKey);
+                    SecureStorage.Default.Remove(AuthenticatedUserIdStorageKey);
+                    _authenticatedUserId = null;
+                    return;
+                }
+
+                await SecureStorage.Default.SetAsync(AuthTokenStorageKey, token);
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AUTH] No se pudo guardar la sesión segura: {exception.Message}");
+            }
+        }
+
+        public async Task RestoreAuthTokenAsync()
+        {
+            if (!string.IsNullOrWhiteSpace(_authToken))
+            {
+                return;
+            }
+
+            try
+            {
+                var token = await SecureStorage.Default.GetAsync(AuthTokenStorageKey);
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    SetAuthToken(token);
+
+                    var userId = await SecureStorage.Default.GetAsync(AuthenticatedUserIdStorageKey);
+                    if (int.TryParse(userId, out var parsedUserId) && parsedUserId > 0)
+                    {
+                        _authenticatedUserId = parsedUserId;
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AUTH] No se pudo restaurar la sesión segura: {exception.Message}");
+            }
+        }
+
         public async Task<ConversationApiResponse?> EnsureConversationAsync(
             int workerId,
             int companyId,
             CancellationToken cancellationToken = default)
         {
+            await RestoreAuthTokenAsync();
+
             var response = await _httpClient.PostAsJsonAsync(
                 "mensajes/conversaciones",
                 new { WorkerId = workerId, CompanyId = companyId },
@@ -75,6 +131,57 @@ namespace CrownBuilders.Services
             return await response.Content
                 .ReadFromJsonAsync<ConversationApiResponse>(cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        public async Task<CrownBuilders.MensajeApiResponse> EnviarMensajeAsync(
+            int conversationId,
+            Guid clientMessageId,
+            string text,
+            CancellationToken cancellationToken = default)
+        {
+            if (conversationId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(conversationId));
+            }
+
+            if (clientMessageId == Guid.Empty)
+            {
+                throw new ArgumentException("La clave de cliente es obligatoria.", nameof(clientMessageId));
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                throw new ArgumentException("El mensaje no puede estar vacío.", nameof(text));
+            }
+
+            await RestoreAuthTokenAsync();
+            if (string.IsNullOrWhiteSpace(_authToken))
+            {
+                throw new UnauthorizedAccessException("La sesión no está autenticada.");
+            }
+
+            using var response = await _httpClient.PostAsJsonAsync(
+                $"mensajes/conversaciones/{conversationId}/mensajes",
+                new
+                {
+                    ClientMessageId = clientMessageId,
+                    Text = text
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"La API rechazó el mensaje ({(int)response.StatusCode} {response.StatusCode}). {detail}",
+                    null,
+                    response.StatusCode);
+            }
+
+            return await response.Content
+                       .ReadFromJsonAsync<CrownBuilders.MensajeApiResponse>(cancellationToken: cancellationToken)
+                       .ConfigureAwait(false)
+                   ?? throw new InvalidOperationException("La API confirmó el mensaje sin devolver sus datos.");
         }
 
         // --- AUTENTICACIÓN ---
@@ -101,7 +208,8 @@ namespace CrownBuilders.Services
                     // Inyectar automáticamente el token en el cliente compartido
                     if (!string.IsNullOrEmpty(result?.Token))
                     {
-                        SetAuthToken(result.Token);
+                        await SetAuthTokenAsync(result.Token);
+                        await SetAuthenticatedUserIdAsync(result.Id);
                     }
 
                     return result;
@@ -147,7 +255,8 @@ namespace CrownBuilders.Services
                     // Inyectar automáticamente el token en el cliente compartido
                     if (!string.IsNullOrEmpty(result?.Token))
                     {
-                        SetAuthToken(result.Token);
+                        await SetAuthTokenAsync(result.Token);
+                        await SetAuthenticatedUserIdAsync(result.Id);
                     }
 
                     return result;
@@ -193,6 +302,28 @@ namespace CrownBuilders.Services
             }
 
             return false;
+        }
+
+        private async Task SetAuthenticatedUserIdAsync(int userId)
+        {
+            if (userId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(userId));
+            }
+
+            _authenticatedUserId = userId;
+
+            try
+            {
+                await SecureStorage.Default.SetAsync(
+                    AuthenticatedUserIdStorageKey,
+                    userId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[AUTH] No se pudo guardar el ID de sesión: {exception.Message}");
+            }
         }
 
         // --- REGISTRO ---
