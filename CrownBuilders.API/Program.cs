@@ -13,8 +13,12 @@ if (builder.Environment.IsDevelopment())
 }
 
 // --- CONFIGURACIÓN DE BASE DE DATOS ---
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Server=(localdb)\\mssqllocaldb;Database=CrownBuildersDB;Trusted_Connection=True;";
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "La configuración ConnectionStrings:DefaultConnection es obligatoria.");
+}
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(

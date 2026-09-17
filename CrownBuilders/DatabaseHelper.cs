@@ -17,16 +17,10 @@ namespace CrownBuilders
         private static readonly SemaphoreSlim _initializationLock = new(1, 1);
         private static readonly TimeSpan RemoteDataTimeout = TimeSpan.FromSeconds(8);
 
-        // Producción/Azure:
-        // private static readonly string _apiBaseUrl = "https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/";
-        // Desarrollo local:
         private static readonly string _apiBaseUrl = ApiEndpoints.ApiBaseUrl;
 
-        // UN SOLO CLIENTE ESTÁTICO PARA TODA LA APP (Evita colapso de conexiones y salta errores SSL en emulador)
-        private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-        })
+        // Un solo cliente estático evita agotar conexiones y conserva la validación TLS del sistema.
+        private static readonly HttpClient _httpClient = new HttpClient
         {
             BaseAddress = new Uri(_apiBaseUrl),
             Timeout = TimeSpan.FromSeconds(20)

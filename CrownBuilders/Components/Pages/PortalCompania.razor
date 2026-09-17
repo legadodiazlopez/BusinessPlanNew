@@ -142,14 +142,9 @@
     
     private List<TrabajadorViewModel> listaTrabajadores = new List<TrabajadorViewModel>();
 
-    // Instancia estática de HttpClient con bypass de certificados SSL para evitar saturación de sockets y caídas con Azure
-    private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
+    // Cliente estático con la validación TLS normal de la plataforma.
+    private static readonly HttpClient _httpClient = new HttpClient
     {
-        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-    })
-    {
-        // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/
-        // Desarrollo local:
         BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl),
         Timeout = TimeSpan.FromSeconds(15)
     };

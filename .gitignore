@@ -365,6 +365,7 @@ FodyWeavers.xsd
 # Especificación temporal del módulo de mensajería
 /spec/mensajeria-signalr/
 /spec/optimizacion-carga-datos/
+/spec/azure-production-deployment/
 
 # Salidas temporales de compilación/verificación de Codex
 .codex-test-output*/
@@ -375,6 +376,9 @@ FodyWeavers.xsd
 
 # Guía local de despliegue con configuración de Azure
 /AZURE-DESPLIEGUE.md
+
+# Credenciales administrativas de Firebase
+CrownBuilders.API/FirebaseConfig/*.json
 
 # Informe local de avance del proyecto
 /Informe_Avances_CrownBuilders.docx

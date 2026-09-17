@@ -140,14 +140,9 @@
     private CancellationTokenSource? typingCancellation;
     private string estadoChat = "Conectando...";
 
-    // Cliente estático para reseñas (evita agotar sockets como en la compañía)
-    private static readonly HttpClient _httpClientResenas = new HttpClient(new HttpClientHandler
+    // Cliente estático para reseñas con la validación TLS normal de la plataforma.
+    private static readonly HttpClient _httpClientResenas = new HttpClient
     {
-        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-    })
-    {
-        // Producción/Azure: https://crownbuilders-portal-drbqbfbphpe7hude.centralus-01.azurewebsites.net/api/
-        // Desarrollo local:
         BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl),
         Timeout = TimeSpan.FromSeconds(30)
     };

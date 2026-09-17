@@ -180,16 +180,10 @@ public sealed class MessagingService : IAsyncDisposable
 
     private HubConnection CreateConnection()
     {
-        var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, _, _, _) => true
-        };
-
         var connection = new HubConnectionBuilder()
             .WithUrl(ApiEndpoints.SignalRHubUrl, options =>
             {
                 options.AccessTokenProvider = () => Task.FromResult(_apiService.AuthToken);
-                options.HttpMessageHandlerFactory = _ => handler;
 #if ANDROID
                 // En el emulador Android el handshake WebSocket completa, pero las invocaciones no reciben respuesta.
                 options.Transports = HttpTransportType.LongPolling;

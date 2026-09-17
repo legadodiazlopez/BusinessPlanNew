@@ -1,9 +1,7 @@
 using FirebaseAdmin;
 using FirebaseAdmin.Messaging;
-using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Configuration;
 using System;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace CrownBuilders.API.Services
@@ -24,36 +22,22 @@ namespace CrownBuilders.API.Services
             {
                 try
                 {
-                    // 1. Intentar obtener la ruta desde appsettings.json si está especificada
-                    string rutaCredencial = _configuration["Firebase:CredentialPath"];
-
-                    // 2. Si no está especificada en appsettings.json, buscar automáticamente cualquier archivo .json dentro de FirebaseConfig
-                    if (string.IsNullOrEmpty(rutaCredencial) || !File.Exists(rutaCredencial))
+                    var credential = FirebaseCredentialResolver.Resolve(
+                        _configuration,
+                        AppContext.BaseDirectory);
+                    if (credential is null)
                     {
-                        string carpetaConfig = Path.Combine(AppContext.BaseDirectory, "FirebaseConfig");
-                        if (Directory.Exists(carpetaConfig))
-                        {
-                            var archivosJson = Directory.GetFiles(carpetaConfig, "*.json");
-                            if (archivosJson.Length > 0)
-                            {
-                                rutaCredencial = archivosJson[0]; // Selecciona el JSON de la clave
-                            }
-                        }
-                    }
-
-                    if (string.IsNullOrEmpty(rutaCredencial) || !File.Exists(rutaCredencial))
-                    {
-                        System.Diagnostics.Debug.WriteLine("[Firebase] ATENCIÓN: No se encontró el archivo de credencial JSON en la carpeta FirebaseConfig.");
+                        System.Diagnostics.Debug.WriteLine(
+                            "[Firebase] ATENCIÓN: No se configuró una credencial administrativa.");
                         return;
                     }
 
-                    // Inicialización oficial usando el SDK de FirebaseAdmin
                     FirebaseApp.Create(new AppOptions()
                     {
-                        Credential = GoogleCredential.FromFile(rutaCredencial)
+                        Credential = credential
                     });
 
-                    System.Diagnostics.Debug.WriteLine($"[Firebase] Inicializado con éxito usando: {Path.GetFileName(rutaCredencial)}");
+                    System.Diagnostics.Debug.WriteLine("[Firebase] Inicializado correctamente.");
                 }
                 catch (Exception ex)
                 {
