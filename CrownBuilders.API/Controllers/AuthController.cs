@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using CrownBuilders.API.Contracts;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -39,11 +40,22 @@ namespace CrownBuilders.API.Controllers
 
         // --- OBTENER TODAS LAS COMPAÑÍAS ---
         [HttpGet("companias")]
-        public async Task<IActionResult> ObtenerCompanias()
+        public async Task<IActionResult> ObtenerCompanias(CancellationToken cancellationToken = default)
         {
             try
             {
-                var companias = await _context.Companias.ToListAsync();
+                var companias = await _context.Companias
+                    .AsNoTracking()
+                    .Select(compania => new CompanyDirectoryItemResponse
+                    {
+                        Id = compania.Id,
+                        NombreEmpresa = compania.NombreEmpresa,
+                        Especialidad = compania.Especialidad,
+                        Ciudad = compania.Ciudad,
+                        FormaPago = compania.FormaPago,
+                        MontoPago = compania.MontoPago
+                    })
+                    .ToListAsync(cancellationToken);
                 return Ok(companias);
             }
             catch (Exception ex)

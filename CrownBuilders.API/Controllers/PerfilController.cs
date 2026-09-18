@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using CrownBuilders.API.Contracts;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using Microsoft.EntityFrameworkCore;
@@ -101,16 +102,27 @@ namespace CrownBuilders.API.Controllers
 
         // --- LISTAR COMPAÑÍAS ---
         [HttpGet("listar-companias")]
-        public async Task<IActionResult> GetCompanias()
+        public async Task<IActionResult> GetCompanias(CancellationToken cancellationToken = default)
         {
             try
             {
-                var companias = await _context.Companias.ToListAsync();
+                var companias = await _context.Companias
+                    .AsNoTracking()
+                    .Select(compania => new CompanyDirectoryItemResponse
+                    {
+                        Id = compania.Id,
+                        NombreEmpresa = compania.NombreEmpresa,
+                        Especialidad = compania.Especialidad,
+                        Ciudad = compania.Ciudad,
+                        FormaPago = compania.FormaPago,
+                        MontoPago = compania.MontoPago
+                    })
+                    .ToListAsync(cancellationToken);
                 return Ok(companias);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return StatusCode(500, new { exitoso = false, mensaje = "Error en el servidor", error = ex.Message });
+                return StatusCode(500, new { exitoso = false, mensaje = "Error en el servidor" });
             }
         }
 

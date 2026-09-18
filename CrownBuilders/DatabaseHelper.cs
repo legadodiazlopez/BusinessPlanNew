@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System;
 using System.Linq;
 using System.Threading;
+using CrownBuilders.Models;
 using CrownBuilders.Services;
 
 namespace CrownBuilders
@@ -15,7 +16,7 @@ namespace CrownBuilders
     {
         private static SQLiteAsyncConnection _db;
         private static readonly SemaphoreSlim _initializationLock = new(1, 1);
-        private static readonly TimeSpan RemoteDataTimeout = TimeSpan.FromSeconds(8);
+        private static readonly TimeSpan RemoteDataTimeout = TimeSpan.FromSeconds(30);
 
         private static readonly string _apiBaseUrl = ApiEndpoints.ApiBaseUrl;
 
@@ -41,6 +42,7 @@ namespace CrownBuilders
                 // Crear tablas como caché local
                 await db.CreateTableAsync<Trabajador>();
                 await db.CreateTableAsync<PerfilCompania>();
+                await db.CreateTableAsync<CompaniaDirectorioCache>();
                 await db.CreateTableAsync<Garantia>();
                 await db.CreateTableAsync<Asistencia>();
                 await db.CreateTableAsync<CrownBuilders.Models.Mensaje>();
@@ -291,26 +293,13 @@ namespace CrownBuilders
             await InitAsync().ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var perfilesLocales = await _db.Table<PerfilCompania>()
+            var companiasLocales = await _db.Table<CompaniaDirectorioCache>()
                 .ToListAsync()
                 .ConfigureAwait(false);
 
-            var listaLocal = perfilesLocales.Select(p =>
-            {
-                double.TryParse(p.MontoPago, out var montoParsed);
-                return new CrownBuilders.Components.Pages.CompaniasDisponibles.Compania
-                {
-                    Id = p.Id,
-                    Nombre = p.NombreEmpresa ?? "Compañía",
-                    Ciudad = p.Ciudad ?? "Long Island",
-                    Especialidad = p.Especialidad ?? "General",
-                    FormaPago = p.FormaPago ?? string.Empty,
-                    MontoPago = montoParsed > 0 ? montoParsed : 40.0,
-                    Puntualidad = 5,
-                    Pagos = 5,
-                    Trato = 5
-                };
-            }).ToList();
+            var listaLocal = companiasLocales
+                .Select(MapearCompaniaDirectorio)
+                .ToList();
 
             System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Caché local: {listaLocal.Count} registros");
             return listaLocal;
@@ -331,48 +320,34 @@ namespace CrownBuilders
                 }
 
                 var companiasApi = await response.Content
-                    .ReadFromJsonAsync<List<CrownBuilders.Models.Compania>>(cancellationToken: cancellationToken)
+                    .ReadFromJsonAsync<List<CompanyDirectoryItem>>(cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
                 if (companiasApi is null)
                 {
                     return null;
                 }
 
-                foreach (var companiaApi in companiasApi)
+                var cache = companiasApi.Select(compania => new CompaniaDirectorioCache
                 {
-                    await _db.InsertOrReplaceAsync(new PerfilCompania
+                    Id = compania.Id,
+                    NombreEmpresa = compania.NombreEmpresa,
+                    Especialidad = compania.Especialidad,
+                    Ciudad = compania.Ciudad,
+                    FormaPago = compania.FormaPago,
+                    MontoPago = compania.MontoPago
+                }).ToList();
+
+                await _db.RunInTransactionAsync(connection =>
+                {
+                    connection.DeleteAll<CompaniaDirectorioCache>();
+                    if (cache.Count > 0)
                     {
-                        Id = companiaApi.Id,
-                        FotoPerfil = companiaApi.FotoPerfil,
-                        NombreEmpresa = companiaApi.NombreEmpresa,
-                        Especialidad = companiaApi.Especialidad,
-                        Ciudad = companiaApi.Ciudad,
-                        Correo = companiaApi.Correo,
-                        Telefono = companiaApi.Telefono,
-                        Password = companiaApi.Password,
-                        FormaPago = companiaApi.FormaPago,
-                        MontoPago = companiaApi.MontoPago.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        NombreTitular = companiaApi.NombreTitular,
-                        NumeroTarjeta = companiaApi.NumeroTarjeta,
-                        FechaExpiracion = companiaApi.FechaExpiracion,
-                        CVC = companiaApi.CVC,
-                        FcmToken = companiaApi.FcmToken
-                    }).ConfigureAwait(false);
-                }
+                        connection.InsertAll(cache);
+                    }
+                }).ConfigureAwait(false);
 
                 System.Diagnostics.Debug.WriteLine($"[COMPAÑÍAS] Directorio remoto sincronizado: {companiasApi.Count} registros");
-                return companiasApi.Select(c => new CrownBuilders.Components.Pages.CompaniasDisponibles.Compania
-                {
-                    Id = c.Id,
-                    Nombre = c.NombreEmpresa ?? string.Empty,
-                    Ciudad = c.Ciudad ?? string.Empty,
-                    Especialidad = c.Especialidad ?? string.Empty,
-                    FormaPago = c.FormaPago ?? string.Empty,
-                    MontoPago = (double)c.MontoPago,
-                    Puntualidad = 5,
-                    Pagos = 5,
-                    Trato = 5
-                }).ToList();
+                return cache.Select(MapearCompaniaDirectorio).ToList();
             }
             catch (TaskCanceledException)
             {
@@ -389,6 +364,20 @@ namespace CrownBuilders
 
             return null;
         }
+
+        private static CrownBuilders.Components.Pages.CompaniasDisponibles.Compania MapearCompaniaDirectorio(
+            CompaniaDirectorioCache compania) => new()
+        {
+            Id = compania.Id,
+            Nombre = compania.NombreEmpresa,
+            Ciudad = compania.Ciudad,
+            Especialidad = compania.Especialidad,
+            FormaPago = compania.FormaPago,
+            MontoPago = (double)compania.MontoPago,
+            Puntualidad = 5,
+            Pagos = 5,
+            Trato = 5
+        };
 
         public static async Task<PerfilCompania> ObtenerCompaniaPorIdAsync(int id)
         {

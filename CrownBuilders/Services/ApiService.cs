@@ -526,16 +526,16 @@ namespace CrownBuilders.Services
             }
         }
 
-        public async Task<List<Compania>?> ObtenerCompaniasAsync()
+        public async Task<List<CompanyDirectoryItem>?> ObtenerCompaniasAsync()
         {
             try
             {
-                return await _httpClient.GetFromJsonAsync<List<Compania>>("Perfil/listar-companias");
+                return await _httpClient.GetFromJsonAsync<List<CompanyDirectoryItem>>("Perfil/listar-companias");
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ERROR DETALLADO LISTAR COMPAÑÍAS]: {ex.InnerException?.Message ?? ex.Message}");
-                return new List<Compania>();
+                return new List<CompanyDirectoryItem>();
             }
         }
 
