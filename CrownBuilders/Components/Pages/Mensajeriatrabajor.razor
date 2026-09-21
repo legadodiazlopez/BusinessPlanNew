@@ -13,17 +13,15 @@
 
 <div class="container-fluid d-flex flex-column cb-chat-screen">
     <!-- ENCABEZADO CON BOTONES DE VOLVER, RESEÑA Y REPORTAR UNIFICADOS -->
-    <div class="cb-chat-header p-3 d-flex align-items-center justify-content-between">
-        <div class="d-flex align-items-center">
-            <button class="cb-chat-back-button me-2" @onclick="Volver">← <span>Volver</span></button>
-            <h5 class="fw-bold mb-0 ms-2">Chat con @nombreCompania</h5>
+    <div class="cb-chat-header p-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center flex-grow-1 min-width-0">
+            <button class="cb-chat-back-button me-2 flex-shrink-0" @onclick="Volver">← <span>Volver</span></button>
+            <h5 class="fw-bold mb-0 ms-2 text-truncate">Chat con @nombreCompania</h5>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <!-- Diseño profesional y discreto para "Próximamente" -->
-            <div class="bg-light text-secondary px-2 py-1 rounded-pill small cb-chat-coming-soon">
+        <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <div class="bg-light text-secondary px-2 py-1 rounded-pill small cb-chat-coming-soon d-none d-sm-block">
                 ⭐ Reseñas <span class="fst-italic">Próximamente</span>
             </div>
-            <!-- Botón de reportar más visible -->
             <button class="btn btn-sm btn-danger fw-bold px-3 shadow-sm rounded-pill" @onclick="ReportarCuenta">
                 Reportar
             </button>
@@ -121,10 +119,8 @@
     [Parameter] public string? CompaniaIdRoute { get; set; }
     private List<MensajeUI> messages = new List<MensajeUI>();
     private string? mensajeNuevo;
-    
     private string nombreCompania = "Compañía";
 
-    // Variables para Reseña
     private bool mostrarModalResena = false;
     private int puntajePuntualidad = 5;
     private int puntajePagos = 5;
@@ -140,7 +136,6 @@
     private CancellationTokenSource? typingCancellation;
     private string estadoChat = "Conectando...";
 
-    // Cliente estático para reseñas con la validación TLS normal de la plataforma.
     private static readonly HttpClient _httpClientResenas = new HttpClient
     {
         BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl),
@@ -161,8 +156,6 @@
         await ApiService.RestoreAuthTokenAsync();
 
         trabajadorIdActual = ApiService.AuthenticatedUserId ?? 0;
-        System.Diagnostics.Debug.WriteLine(
-            $"[CHAT] ID de trabajador autenticado: {trabajadorIdActual}");
 
         if (!string.IsNullOrEmpty(NombreCompaniaRoute))
         {
@@ -186,7 +179,7 @@
             }
             catch (Exception ex)
             {
-                Logger.LogDebug(ex, "No se pudo recuperar el nombre de la compañía para la conversación.");
+                Logger.LogDebug(ex, "No se pudo recuperar el nombre de la compañía.");
             }
         }
 
@@ -203,11 +196,8 @@
 
         try
         {
-            var conversation = await ApiService.EnsureConversationAsync(
-                trabajadorIdActual,
-                companiaIdSimulada);
+            var conversation = await ApiService.EnsureConversationAsync(trabajadorIdActual, companiaIdSimulada);
             conversationId = conversation?.Id ?? 0;
-            System.Diagnostics.Debug.WriteLine($"[CHAT] Conversación trabajador preparada: {conversationId}");
             if (conversationId > 0)
             {
                 MessagingService.MessageReceived += OnMessageReceivedAsync;
@@ -226,12 +216,7 @@
 
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Cargando historial: TrabajadorID={trabajadorIdActual}, CompaniaID={companiaIdSimulada}");
-            
-            // Mismo orden que en compañía: primero base local para carga inmediata
             var historialDB = await DatabaseHelper.ObtenerHistorialAsync(trabajadorIdActual, companiaIdSimulada);
-            System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Mensajes obtenidos: {historialDB?.Count ?? 0}");
-            
             if (historialDB != null)
             {
                 foreach (var msj in historialDB)
@@ -249,7 +234,6 @@
                         EsMio = esMio
                     });
                 }
-                System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Historial cargado con {messages.Count} mensajes");
             }
         }
         catch (Exception ex)
@@ -257,8 +241,6 @@
             System.Diagnostics.Debug.WriteLine($"[MENSAJERÍA] Error cargando historial: {ex.Message}");
             messages.Add(new MensajeUI { Remitente = "Sistema", Texto = "Modo sin conexión cargado.", EsMio = false });
         }
-
-
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -268,12 +250,10 @@
             try
             {
                 chatInicioIntentado = true;
-                System.Diagnostics.Debug.WriteLine($"[CHAT] Iniciando SignalR trabajador para conversación {conversationId}");
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                 await MessagingService.StartAsync(conversationId, cts.Token);
                 chatConectado = true;
                 estadoChat = "Conectado en tiempo real";
-                System.Diagnostics.Debug.WriteLine("[CHAT] SignalR trabajador conectado");
             }
             catch (Exception ex)
             {
@@ -288,18 +268,13 @@
 
     private async Task OnMessageReceivedAsync(MensajeApiResponse message)
     {
-        System.Diagnostics.Debug.WriteLine(
-            $"[CHAT] Mensaje recibido por trabajador: {message.ClientMessageId}");
-
         try
         {
             await DatabaseHelper.GuardarMensajeRemotoAsync(message).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            Logger.LogWarning(
-                exception,
-                "No se pudo guardar el mensaje remoto en la caché local del trabajador.");
+            Logger.LogWarning(exception, "No se pudo guardar el mensaje remoto.");
         }
 
         await InvokeAsync(() =>
@@ -378,10 +353,11 @@
 
     private async Task ReportarCuenta()
     {
-        string numeroWhatsApp = "16314860524";
+        string numeroWhatsApp = "6314860524";
         string mensaje = Uri.EscapeDataString($"Hola soporte, necesito reportar un inconveniente con la compañía {nombreCompania} a través de la app Crown Builders.");
-        string url = $"https://wa.me/{numeroWhatsApp}?text={mensaje}";
-        await JS.InvokeVoidAsync("open", url, "_blank");
+        string url = $"https://wa.me/1{numeroWhatsApp}?text={mensaje}";
+        
+        await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(url);
     }
     
     private async Task EnviarMensaje()
@@ -429,8 +405,6 @@
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[CHAT] Error en envío de trabajador: {ex.GetType().Name}: {ex.Message}");
                 Logger?.LogError($"[CHAT] Error guardando mensaje localmente: {ex.Message}");
             }
 

@@ -254,10 +254,11 @@
 
     private async Task ReportarCuenta()
     {
-        string numeroWhatsApp = "16314860524";
+        string numeroWhatsApp = "6314860524";
         string mensaje = Uri.EscapeDataString($"Hola soporte, necesito reportar un inconveniente con el trabajador {nombreTrabajador} a través de la app Crown Builders.");
-        string url = $"https://wa.me/{numeroWhatsApp}?text={mensaje}";
-        await JS.InvokeVoidAsync("open", url, "_blank");
+        string url = $"https://wa.me/1{numeroWhatsApp}?text={mensaje}";
+        
+        await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(url);
     }
     
     private async Task EnviarMensaje()

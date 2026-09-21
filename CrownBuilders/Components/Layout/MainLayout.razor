@@ -8,7 +8,22 @@
     </div>
 
     <main>
-        <article class="content px-4">
+        <!-- BARRA SUPERIOR AZUL NAVY CON TEXTO BLANCO Y LOGOTIPO -->
+        <div class="top-row px-4 d-flex justify-content-between align-items-center shadow-sm" style="background-color: #001f3f; border-bottom: 1px solid #00152b; padding-top: 10px; padding-bottom: 10px; min-height: 60px;">
+            <div class="d-flex align-items-center gap-2">
+                <!-- Logotipo apuntando correctamente a la carpeta Images dentro de wwwroot -->
+                <img src="Images/Logo_Crown.png" alt="Logo" style="height: 38px; width: auto; object-fit: contain;" />
+                <h5 class="fw-bold mb-0 text-white" style="color: white !important;">Crown Builders</h5>
+            </div>
+            <!-- Botón de soporte con círculo y signo de interrogación color oro -->
+            <button @onclick="ContactarSoporte" class="btn p-0 border-0 bg-transparent" title="Soporte y Reportes">
+                <span style="display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; background-color: #1a1a1a; border: 2px solid #d4af37; color: #d4af37; font-size: 1.25rem; font-weight: bold; box-shadow: 0 2px 6px rgba(212, 175, 55, 0.3);">
+                    ?
+                </span>
+            </button>
+        </div>
+
+        <article class="content px-4 pt-3">
             <ErrorBoundary>
                 <ChildContent>
                     @Body
@@ -30,8 +45,6 @@
     {
         var cultureInfo = CultureInfo.CurrentCulture;
         
-        // Forzamos la cultura detectada para que toda la App (números, fechas, textos)
-        // se comporte según el idioma del teléfono del usuario.
         CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
         CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
     }
@@ -50,5 +63,15 @@
                 System.Diagnostics.Debug.WriteLine($"Error al inicializar SQLite: {ex.Message}");
             }
         }
+    }
+
+    // 3. Lógica para el botón de Soporte (WhatsApp)
+    private async Task ContactarSoporte()
+    {
+        string numeroWhatsApp = "6314860524";
+        string mensaje = Uri.EscapeDataString("Hola soporte, necesito ayuda general con la aplicación Crown Builders.");
+        string url = $"https://wa.me/1{numeroWhatsApp}?text={mensaje}";
+        
+        await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(url);
     }
 }

@@ -190,7 +190,7 @@ namespace CrownBuilders.Diagnostics
             if (Debugger.IsAttached)
             {
                 // Pausa la ejecución en Visual Studio, en este punto exacto.
-                Debugger.Break();
+                 Debugger.Break();
             }
         }
 
