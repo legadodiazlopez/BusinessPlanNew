@@ -1,6 +1,6 @@
 ﻿namespace CrownBuilders.API.Models
 {
-    public class Compania
+    public partial class Compania
     {
         public int Id { get; set; }
         public string? FotoPerfil { get; set; }
@@ -12,11 +12,11 @@
         public string Password { get; set; }
         public string FormaPago { get; set; }
         public decimal MontoPago { get; set; }
-        public string NombreTitular { get; set; }
-        public string NumeroTarjeta { get; set; }
-        public string FechaExpiracion { get; set; }
-        public string CVC { get; set; }
         public bool AceptaTerminos { get; set; }
         public string? FcmToken { get; set; }
+        public string? StripeCustomerId { get; set; }
+        public string? StripeSubscriptionId { get; set; }
+        public string? StripeCheckoutSessionId { get; set; }
+        public string StripePaymentStatus { get; set; } = "pending";
     }
 }

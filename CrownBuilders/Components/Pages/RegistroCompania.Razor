@@ -3,7 +3,6 @@
 @using CrownBuilders.Services
 @using CrownBuilders.Models
 @using System.Net.Http.Json
-@using System.Globalization
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject ApiService ApiService
@@ -89,20 +88,8 @@
         <label>Monto a Pagar ($)</label>
         <input class="form-control" type="number" min="0" @bind="perfil.MontoPago" disabled="@cargando" />
         
-        <label>Nombre del Titular</label>
-        <input class="form-control" @bind="perfil.NombreTitular" disabled="@cargando" />
-        
-        <label class="form-label">Número de Tarjeta</label>
-        <input class="form-control" inputmode="numeric" pattern="[0-9]{13,19}" minlength="13" maxlength="19" @bind="perfil.NumeroTarjeta" placeholder="13 a 19 dígitos" autocomplete="cc-number" required disabled="@cargando" />
-        
-        <label class="form-label">Expiración</label>
-        <input class="form-control" type="month" value="@fechaExpiracionMes" @onchange="ActualizarFechaExpiracion" min="@MesMinimoExpiracion" autocomplete="cc-exp" required disabled="@cargando" />
-        
-        <label class="form-label">Código de Seguridad (CVC)</label>
-        <input class="form-control" type="password" inputmode="numeric" pattern="[0-9]{3}" minlength="3" maxlength="3" @bind="perfil.CVC" placeholder="3 dígitos" autocomplete="cc-csc" required disabled="@cargando" />
-
         <div class="alert alert-info mt-2" style="font-size: 0.9em; padding: 10px;">
-            <strong>Suscripción:</strong> $15 USD mensuales.
+            <strong>Pago seguro:</strong> después de crear la cuenta serás enviado a Stripe Checkout para completar la suscripción. Crown Builders no recibe ni guarda los datos de tu tarjeta.
         </div>
         
         <div class="form-check mb-3 d-flex align-items-center ps-0">
@@ -175,16 +162,6 @@
     private string codigoIngresado = "123456";
     private string codigoGenerado = "123456";
     private string mensajeError = string.Empty;
-    private string fechaExpiracionMes = string.Empty;
-
-    private string MesMinimoExpiracion =>
-        DateTime.Today.AddMonths(1).ToString("yyyy-MM", CultureInfo.InvariantCulture);
-
-    private void ActualizarFechaExpiracion(ChangeEventArgs e)
-    {
-        fechaExpiracionMes = e.Value?.ToString() ?? string.Empty;
-    }
-
     private bool ValidarFormulario()
     {
         if (string.IsNullOrWhiteSpace(perfil.NombreEmpresa) ||
@@ -195,10 +172,6 @@
             string.IsNullOrWhiteSpace(perfil.Password) ||
             string.IsNullOrWhiteSpace(perfil.FormaPago) ||
             string.IsNullOrWhiteSpace(perfil.MontoPago) ||
-            string.IsNullOrWhiteSpace(perfil.NombreTitular) ||
-            string.IsNullOrWhiteSpace(perfil.NumeroTarjeta) ||
-            string.IsNullOrWhiteSpace(fechaExpiracionMes) ||
-            string.IsNullOrWhiteSpace(perfil.CVC) ||
             !perfil.AceptaTerminos)
         {
             mensajeError = "Completa todos los campos requeridos y acepta los términos.";
@@ -214,24 +187,6 @@
         if (!CompanyRegistrationValidation.IsValidPhone(perfil.Telefono))
         {
             mensajeError = "El teléfono debe contener exactamente 10 dígitos numéricos.";
-            return false;
-        }
-
-        if (!CompanyRegistrationValidation.IsValidCardNumber(perfil.NumeroTarjeta))
-        {
-            mensajeError = "El número de tarjeta debe tener entre 13 y 19 dígitos y ser válido.";
-            return false;
-        }
-
-        if (!CompanyRegistrationValidation.IsValidExpiration(fechaExpiracionMes, DateTime.Today))
-        {
-            mensajeError = "Selecciona una fecha de expiración posterior al mes actual.";
-            return false;
-        }
-
-        if (!CompanyRegistrationValidation.IsValidCvc(perfil.CVC))
-        {
-            mensajeError = "El código de seguridad debe contener exactamente 3 dígitos.";
             return false;
         }
 
@@ -319,8 +274,6 @@
             decimal monto = 0;
             decimal.TryParse(perfil.MontoPago, out monto);
 
-            perfil.FechaExpiracion = CompanyRegistrationValidation.ToStoredExpiration(fechaExpiracionMes);
-
             var companiaParaApi = new Compania
             {
                 Id = perfil.Id,
@@ -333,10 +286,6 @@
                 Password = perfil.Password,
                 FormaPago = perfil.FormaPago,
                 MontoPago = monto,
-                NombreTitular = perfil.NombreTitular,
-                NumeroTarjeta = perfil.NumeroTarjeta,
-                FechaExpiracion = perfil.FechaExpiracion,
-                CVC = perfil.CVC,
                 AceptaTerminos = perfil.AceptaTerminos
             };
 
@@ -360,7 +309,17 @@
                     return;
                 }
 
-                await JS.InvokeVoidAsync("alert", "¡Registro exitoso! Cuenta creada correctamente.");
+                var checkout = await ApiService.CrearCheckoutSessionAsync();
+                if (!string.IsNullOrWhiteSpace(checkout?.CheckoutUrl))
+                {
+                    await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(checkout.CheckoutUrl);
+                }
+                else
+                {
+                    await JS.InvokeVoidAsync(
+                        "alert",
+                        "Cuenta creada. El pago quedó pendiente porque Stripe todavía no está configurado.");
+                }
                 Navigation.NavigateTo("/portal-compania");
             }
             else

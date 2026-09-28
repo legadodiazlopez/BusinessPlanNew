@@ -366,6 +366,7 @@ FodyWeavers.xsd
 /spec/mensajeria-signalr/
 /spec/optimizacion-carga-datos/
 /spec/azure-production-deployment/
+/spec/stripe-checkout-responsive-header/
 
 # Salidas temporales de compilación/verificación de Codex
 .codex-test-output*/
@@ -376,6 +377,7 @@ FodyWeavers.xsd
 
 # Guía local de despliegue con configuración de Azure
 /AZURE-DESPLIEGUE.md
+/docs/superpowers/plans/2026-09-28-stripe-checkout-responsive-header.md
 
 # Credenciales administrativas de Firebase
 CrownBuilders.API/FirebaseConfig/*.json

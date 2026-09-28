@@ -400,7 +400,20 @@ namespace CrownBuilders.Services
         {
             try
             {
-                var response = await _httpClient.PostAsJsonAsync("Perfil/guardar-compania", compania);
+                var request = new CompanyRegistrationRequest
+                {
+                    FotoPerfil = compania.FotoPerfil,
+                    NombreEmpresa = compania.NombreEmpresa,
+                    Especialidad = compania.Especialidad,
+                    Ciudad = compania.Ciudad,
+                    Correo = compania.Correo,
+                    Telefono = compania.Telefono,
+                    Password = compania.Password,
+                    FormaPago = compania.FormaPago,
+                    MontoPago = compania.MontoPago,
+                    AceptaTerminos = compania.AceptaTerminos
+                };
+                var response = await _httpClient.PostAsJsonAsync("Perfil/guardar-compania", request);
                 var responseString = await response.Content.ReadAsStringAsync();
                 var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
@@ -462,6 +475,28 @@ namespace CrownBuilders.Services
                 System.Diagnostics.Debug.WriteLine($"[API EXCEPCIÓN DETALLADA] Error en RegistrarCompania:\n{ex}");
                 return new RegistroResponse { Exitoso = false, Mensaje = $"Error de conexión: {ex.Message}" };
             }
+        }
+
+        public async Task<CheckoutSessionResponseDto?> CrearCheckoutSessionAsync(
+            CancellationToken cancellationToken = default)
+        {
+            await RestoreAuthTokenAsync();
+            if (string.IsNullOrWhiteSpace(_authToken))
+            {
+                return null;
+            }
+
+            using var response = await _httpClient.PostAsync(
+                "Stripe/create-checkout-session",
+                content: null,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<CheckoutSessionResponseDto>(
+                cancellationToken: cancellationToken);
         }
 
         // --- SERVICIO DE SMS ---
@@ -596,6 +631,11 @@ namespace CrownBuilders.Services
         public string Mensaje { get; set; }
         public int Id { get; set; }
         public string Correo { get; set; }
+    }
+
+    public sealed class CheckoutSessionResponseDto
+    {
+        public string? CheckoutUrl { get; set; }
     }
 
     public sealed class ResultadoActualizacion

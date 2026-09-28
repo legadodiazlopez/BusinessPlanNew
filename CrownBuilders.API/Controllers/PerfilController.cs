@@ -19,20 +19,36 @@ namespace CrownBuilders.API.Controllers
 
         // --- REGISTRO COMPAÑÍA ---
         [HttpPost("guardar-compania")]
-        public async Task<IActionResult> GuardarCompania([FromBody] Compania datosCompania)
+        public async Task<IActionResult> GuardarCompania([FromBody] CompanyRegistrationRequest request)
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine($"[API] Recibiendo registro compañía: {datosCompania.Correo}");
+                var correo = request.Correo.Trim().ToLowerInvariant();
+                System.Diagnostics.Debug.WriteLine($"[API] Recibiendo registro compañía: {correo}");
                 
                 var existe = await _context.Companias
-                    .AnyAsync(c => c.Correo == datosCompania.Correo);
+                    .AnyAsync(c => c.Correo == correo);
 
                 if (existe)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[API] Correo ya existe: {datosCompania.Correo}");
+                    System.Diagnostics.Debug.WriteLine($"[API] Correo ya existe: {correo}");
                     return Conflict(new { exitoso = false, mensaje = "El correo ya está registrado" });
                 }
+
+                var datosCompania = new Compania
+                {
+                    FotoPerfil = request.FotoPerfil,
+                    NombreEmpresa = request.NombreEmpresa.Trim(),
+                    Especialidad = request.Especialidad.Trim(),
+                    Ciudad = request.Ciudad.Trim(),
+                    Correo = correo,
+                    Telefono = request.Telefono.Trim(),
+                    Password = request.Password,
+                    FormaPago = request.FormaPago.Trim(),
+                    MontoPago = request.MontoPago,
+                    AceptaTerminos = request.AceptaTerminos,
+                    StripePaymentStatus = "pending"
+                };
 
                 _context.Companias.Add(datosCompania);
                 await _context.SaveChangesAsync();
