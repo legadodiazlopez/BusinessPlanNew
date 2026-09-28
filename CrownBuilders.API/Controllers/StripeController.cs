@@ -20,9 +20,20 @@ namespace CrownBuilders.API.Controllers
         {
             try
             {
+                // 1. Crear el cliente en Stripe utilizando los datos enviados desde la app móvil
+                var customerOptions = new CustomerCreateOptions
+                {
+                    Name = request.NombreCompania,
+                    Email = request.EmailCompania,
+                    Phone = request.TelefonoCompania
+                };
+                var customerService = new CustomerService();
+                Customer customer = await customerService.CreateAsync(customerOptions);
+
+                // 2. Crear la suscripción vinculada al nuevo cliente y al precio configurado
                 var options = new SubscriptionCreateOptions
                 {
-                    Customer = request.CustomerId,
+                    Customer = customer.Id,
                     Items = new List<SubscriptionItemOptions>
                     {
                         new SubscriptionItemOptions
@@ -31,6 +42,7 @@ namespace CrownBuilders.API.Controllers
                         },
                     },
                     PaymentBehavior = "default_incomplete",
+                    Expand = new List<string> { "latest_invoice.payment_intent" }
                 };
 
                 var service = new SubscriptionService();
@@ -50,8 +62,8 @@ namespace CrownBuilders.API.Controllers
 
     public class SubscriptionRequest
     {
-        public string CustomerId{ get; set; }
-        
-        }
-
+        public string NombreCompania { get; set; }
+        public string EmailCompania { get; set; }
+        public string TelefonoCompania { get; set; }
     }
+}
