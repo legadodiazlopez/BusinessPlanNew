@@ -67,6 +67,21 @@ public sealed class StripeCheckoutContractTests
         }
     }
 
+    [Fact]
+    public void AndroidCheckoutReturn_RegistersDeepLinkAndHandlesActivityResume()
+    {
+        var activity = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Platforms", "Android", "MainActivity.cs")));
+        var returnService = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Services", "CheckoutReturnService.cs")));
+
+        Assert.Contains("DataScheme = \"crownbuilders\"", activity, StringComparison.Ordinal);
+        Assert.Contains("DataHost = \"checkout\"", activity, StringComparison.Ordinal);
+        Assert.Contains("OnNewIntent", activity, StringComparison.Ordinal);
+        Assert.Contains("success", returnService, StringComparison.Ordinal);
+        Assert.Contains("cancel", returnService, StringComparison.Ordinal);
+    }
+
     private static Type FindStripeControllerType()
     {
         var controllerType = typeof(CrownBuilders.API.Services.FirebaseNotificationService).Assembly.GetType(

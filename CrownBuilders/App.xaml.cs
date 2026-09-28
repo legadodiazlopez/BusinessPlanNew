@@ -1,12 +1,14 @@
-﻿namespace CrownBuilders
+using CrownBuilders.Services;
+
+namespace CrownBuilders
 {
     public partial class App : Application
     {
-        public App()
+        public App(CheckoutReturnService checkoutReturnService)
         {
             InitializeComponent();
 
-            MainPage = new MainPage(); 
+            MainPage = new MainPage(checkoutReturnService);
         }
     }
 }

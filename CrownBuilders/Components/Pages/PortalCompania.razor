@@ -18,6 +18,13 @@
         </button>
     </div>
 
+    @if (mensajeCheckout is not null)
+    {
+        <div class="alert @(checkoutExitoso ? "alert-success" : "alert-warning") shadow-sm" role="status">
+            @mensajeCheckout
+        </div>
+    }
+
     @if (!mostrarConfiguracion)
     {
         <div class="mb-3">
@@ -139,6 +146,11 @@
     private bool mostrarConfiguracion = false;
     private string textoBusqueda = "";
     private bool estaCargando = true;
+    private string? mensajeCheckout;
+    private bool checkoutExitoso;
+
+    [SupplyParameterFromQuery(Name = "checkout")]
+    public string? CheckoutResult { get; set; }
     
     private List<TrabajadorViewModel> listaTrabajadores = new List<TrabajadorViewModel>();
 
@@ -151,6 +163,12 @@
 
     protected override void OnInitialized()
     {
+        checkoutExitoso = string.Equals(CheckoutResult, "success", StringComparison.OrdinalIgnoreCase);
+        mensajeCheckout = checkoutExitoso
+            ? "Regresaste de Stripe. La suscripción se confirmará mediante el webhook."
+            : string.Equals(CheckoutResult, "cancel", StringComparison.OrdinalIgnoreCase)
+                ? "El pago fue cancelado. Puedes intentarlo nuevamente."
+                : null;
         _ = CargarDatosPortalAsync();
     }
 
