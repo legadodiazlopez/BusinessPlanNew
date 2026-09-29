@@ -17,7 +17,8 @@ public sealed class CompanyProfileIdentityTests
             Path.Combine("CrownBuilders", "DatabaseHelper.cs")));
 
         Assert.Contains("ObtenerPerfilCompaniaAsync(companiaIdActual)", portal);
-        Assert.Contains("ObtenerPerfilCompaniaAsync(ApiService.AuthenticatedUserId ?? 0)", editProfile);
+        Assert.Contains("var companiaId = ApiService.AuthenticatedUserId ?? 0", editProfile);
+        Assert.Contains("ObtenerCompaniaAsync(companiaId)", editProfile);
         Assert.Contains("await ApiService.LoginCompaniaAsync(", registration);
         Assert.Contains("Where(p => p.Id == companiaId)", databaseHelper);
         Assert.DoesNotContain("ObtenerPerfilCompaniaAsync()", portal);

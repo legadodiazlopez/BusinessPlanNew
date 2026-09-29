@@ -16,6 +16,11 @@
         public string NumeroTarjeta { get; set; }
         public string FechaExpiracion { get; set; }
         public string CVC { get; set; }
+        public string? StripeCardholderName { get; set; }
+        public string? StripeCardBrand { get; set; }
+        public string? StripeCardLast4 { get; set; }
+        public int? StripeCardExpMonth { get; set; }
+        public int? StripeCardExpYear { get; set; }
         public bool AceptaTerminos { get; set; }
         public string? FcmToken { get; set; }
     }

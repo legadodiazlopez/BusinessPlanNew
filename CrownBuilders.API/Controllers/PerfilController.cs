@@ -212,11 +212,18 @@ namespace CrownBuilders.API.Controllers
         }
 
         // --- OBTENER COMPAÑÍA POR ID ---
+        [Microsoft.AspNetCore.Authorization.Authorize(Roles = "compania")]
         [HttpGet("compania/{id}")]
         public async Task<IActionResult> GetCompania(int id)
         {
             try
             {
+                var authenticatedUser = AuthenticatedUserAccessor.FromPrincipal(User);
+                if (authenticatedUser.UserType != "compania" || authenticatedUser.UserId != id)
+                {
+                    return Forbid();
+                }
+
                 var compania = await _context.Companias.FindAsync(id);
                 if (compania == null)
                 {

@@ -675,6 +675,11 @@ namespace CrownBuilders
         public string NumeroTarjeta { get; set; }
         public string FechaExpiracion { get; set; }
         public string CVC { get; set; }
+        [Ignore] public string? StripeCardholderName { get; set; }
+        [Ignore] public string? StripeCardBrand { get; set; }
+        [Ignore] public string? StripeCardLast4 { get; set; }
+        [Ignore] public int? StripeCardExpMonth { get; set; }
+        [Ignore] public int? StripeCardExpYear { get; set; }
         public bool SuscripcionActiva { get; set; }
         public bool AceptaTerminos { get; set; }
         public string? FcmToken { get; set; }

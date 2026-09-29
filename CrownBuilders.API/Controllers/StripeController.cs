@@ -1,5 +1,6 @@
 using System.Globalization;
 using CrownBuilders.API.Data;
+using CrownBuilders.API.Models;
 using CrownBuilders.API.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -101,6 +102,54 @@ public sealed class StripeController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "compania")]
+    [HttpPost("sync-payment-method")]
+    public async Task<IActionResult> SyncPaymentMethod(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var authenticatedUser = AuthenticatedUserAccessor.FromPrincipal(User);
+            var compania = await _context.Companias
+                .SingleOrDefaultAsync(c => c.Id == authenticatedUser.UserId, cancellationToken);
+
+            if (compania is null)
+            {
+                return NotFound(new { error = "Compañía no encontrada." });
+            }
+
+            if (string.IsNullOrWhiteSpace(compania.StripeSubscriptionId) &&
+                string.IsNullOrWhiteSpace(compania.StripeCheckoutSessionId))
+            {
+                return Ok(new { sincronizado = false });
+            }
+
+            await PersistCardSummaryAsync(
+                compania,
+                compania.StripeSubscriptionId,
+                null,
+                null,
+                compania.StripeCheckoutSessionId,
+                cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            return Ok(new
+            {
+                sincronizado = !string.IsNullOrWhiteSpace(compania.StripeCardLast4),
+                compania.StripeCardholderName,
+                compania.StripeCardBrand,
+                compania.StripeCardLast4,
+                compania.StripeCardExpMonth,
+                compania.StripeCardExpYear
+            });
+        }
+        catch (StripeException exception)
+        {
+            _logger.LogWarning(exception, "No se pudo sincronizar el método de pago de la compañía.");
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { error = "Stripe no devolvió los datos resumidos de la tarjeta." });
+        }
+    }
+
     [AllowAnonymous]
     [HttpGet("checkout-return/{result}")]
     public IActionResult CheckoutReturn(string result)
@@ -196,7 +245,119 @@ public sealed class StripeController : ControllerBase
         compania.StripeSubscriptionId = session.SubscriptionId;
         compania.StripeCheckoutSessionId = session.Id;
         compania.StripePaymentStatus = session.PaymentStatus == "paid" ? "paid" : "pending";
+        await PersistCardSummaryAsync(
+            compania,
+            session.SubscriptionId,
+            session.PaymentIntentId,
+            session.CustomerDetails?.Name,
+            session.Id,
+            cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task PersistCardSummaryAsync(
+        Compania compania,
+        string? subscriptionId,
+        string? paymentIntentId,
+        string? fallbackCardholderName,
+        string? checkoutSessionId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            PaymentMethod? paymentMethod = null;
+            StripeConfiguration.ApiKey = _stripeOptions.SecretKey;
+
+            if (!string.IsNullOrWhiteSpace(subscriptionId))
+            {
+                var subscription = await new SubscriptionService().GetAsync(
+                    subscriptionId,
+                    new SubscriptionGetOptions
+                    {
+                        Expand =
+                        [
+                            "default_payment_method",
+                            "latest_invoice.default_payment_method"
+                        ]
+                    },
+                    cancellationToken: cancellationToken);
+
+                paymentMethod = subscription.DefaultPaymentMethod ?? subscription.LatestInvoice?.DefaultPaymentMethod;
+                if (paymentMethod is null && !string.IsNullOrWhiteSpace(subscription.DefaultPaymentMethodId))
+                {
+                    paymentMethod = await new PaymentMethodService().GetAsync(
+                        subscription.DefaultPaymentMethodId,
+                        cancellationToken: cancellationToken);
+                }
+
+                if (paymentMethod is null && !string.IsNullOrWhiteSpace(subscription.LatestInvoice?.DefaultPaymentMethodId))
+                {
+                    paymentMethod = await new PaymentMethodService().GetAsync(
+                        subscription.LatestInvoice.DefaultPaymentMethodId,
+                        cancellationToken: cancellationToken);
+                }
+            }
+
+            if (paymentMethod is null && !string.IsNullOrWhiteSpace(paymentIntentId))
+            {
+                var paymentIntent = await new PaymentIntentService().GetAsync(
+                    paymentIntentId,
+                    new PaymentIntentGetOptions
+                    {
+                        Expand = ["payment_method"]
+                    },
+                    cancellationToken: cancellationToken);
+                paymentMethod = paymentIntent.PaymentMethod;
+            }
+
+            if (!string.IsNullOrWhiteSpace(checkoutSessionId) &&
+                (paymentMethod is null || string.IsNullOrWhiteSpace(fallbackCardholderName)))
+            {
+                var checkoutSession = await new SessionService().GetAsync(
+                    checkoutSessionId,
+                    new SessionGetOptions
+                    {
+                        Expand =
+                        [
+                            "payment_intent.payment_method",
+                            "subscription.default_payment_method"
+                        ]
+                    },
+                    cancellationToken: cancellationToken);
+
+                paymentMethod ??= checkoutSession.PaymentIntent?.PaymentMethod ??
+                    checkoutSession.Subscription?.DefaultPaymentMethod;
+                fallbackCardholderName ??= checkoutSession.CustomerDetails?.Name;
+            }
+
+            if (paymentMethod is null ||
+                !string.Equals(paymentMethod.Type, "card", StringComparison.OrdinalIgnoreCase) ||
+                paymentMethod.Card is null)
+            {
+                return;
+            }
+
+            var cardholderName = paymentMethod.BillingDetails?.Name;
+            if (string.IsNullOrWhiteSpace(cardholderName))
+            {
+                cardholderName = fallbackCardholderName;
+            }
+
+            compania.StripeCardholderName = string.IsNullOrWhiteSpace(cardholderName)
+                ? null
+                : cardholderName.Trim();
+            compania.StripeCardBrand = paymentMethod.Card.DisplayBrand ?? paymentMethod.Card.Brand;
+            compania.StripeCardLast4 = paymentMethod.Card.Last4;
+            compania.StripeCardExpMonth = checked((int)paymentMethod.Card.ExpMonth);
+            compania.StripeCardExpYear = checked((int)paymentMethod.Card.ExpYear);
+        }
+        catch (StripeException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "No se pudo guardar el resumen seguro de la tarjeta para el Checkout {CheckoutSessionId}.",
+                checkoutSessionId);
+        }
     }
 
     private async Task ProcessSubscriptionChangedAsync(Event stripeEvent, CancellationToken cancellationToken)
@@ -222,6 +383,16 @@ public sealed class StripeController : ControllerBase
             "canceled" or "unpaid" or "past_due" => "inactive",
             _ => "pending"
         };
+        if (stripeEvent.Type == EventTypes.CustomerSubscriptionUpdated)
+        {
+            await PersistCardSummaryAsync(
+                compania,
+                subscription.Id,
+                null,
+                null,
+                null,
+                cancellationToken);
+        }
         await _context.SaveChangesAsync(cancellationToken);
     }
 }

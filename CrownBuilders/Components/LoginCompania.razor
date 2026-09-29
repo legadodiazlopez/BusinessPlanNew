@@ -147,6 +147,11 @@
                             NumeroTarjeta = companiaDesdeAzure.NumeroTarjeta,
                             FechaExpiracion = companiaDesdeAzure.FechaExpiracion,
                             CVC = companiaDesdeAzure.CVC,
+                            StripeCardholderName = companiaDesdeAzure.StripeCardholderName,
+                            StripeCardBrand = companiaDesdeAzure.StripeCardBrand,
+                            StripeCardLast4 = companiaDesdeAzure.StripeCardLast4,
+                            StripeCardExpMonth = companiaDesdeAzure.StripeCardExpMonth,
+                            StripeCardExpYear = companiaDesdeAzure.StripeCardExpYear,
                             AceptaTerminos = companiaDesdeAzure.AceptaTerminos
                         };
                         await DatabaseHelper.GuardarPerfilCompaniaAsync(companiaLocal);

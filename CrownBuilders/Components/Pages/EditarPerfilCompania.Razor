@@ -1,6 +1,7 @@
 @page "/editar-perfil-compania"
 @using CrownBuilders
 @using CrownBuilders.Services
+@using System.Globalization
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject ApiService ApiService
@@ -57,17 +58,27 @@
         <label>Monto a Pagar ($)</label>
         <input class="form-control" type="number" min="0" @bind="perfil.MontoPago" />
         
-        <label>Nombre del Titular</label>
-        <input class="form-control" @bind="perfil.NombreTitular" />
-        
-        <label>Número de Tarjeta</label>
-        <input class="form-control" inputmode="numeric" pattern="[0-9]*" @bind="perfil.NumeroTarjeta" placeholder="Solo números" />
-        
-        <label>Expiración (MM/AA)</label>
-        <input class="form-control" @bind="perfil.FechaExpiracion" placeholder="12/28" />
-        
-        <label>Código de Seguridad (CVC)</label>
-        <input class="form-control" type="password" inputmode="numeric" pattern="[0-9]" maxlength="4" @bind="perfil.CVC" placeholder="**" />
+        <div class="alert alert-info mt-4">
+            Stripe Checkout protege los datos de tu tarjeta. Aquí solo mostramos el resumen seguro que Stripe permite conservar.
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(perfil.StripeCardLast4))
+        {
+            <label>Nombre del titular</label>
+            <input class="form-control" value="@perfil.StripeCardholderName" readonly />
+
+            <label>Tarjeta</label>
+            <input class="form-control" value="@(string.IsNullOrWhiteSpace(perfil.StripeCardBrand) ? $"•••• {perfil.StripeCardLast4}" : $"{perfil.StripeCardBrand} •••• {perfil.StripeCardLast4}")" readonly />
+
+            <label>Expiración (MM/AA)</label>
+            <input class="form-control" value="@FormatearExpiracionTarjeta()" readonly />
+
+            <div class="form-text">CVV: protegido por Stripe y nunca se almacena.</div>
+        }
+        else
+        {
+            <div class="form-text">Completa Stripe Checkout para que aparezca el resumen de tu tarjeta.</div>
+        }
     </div>
 
     <div class="d-flex mt-4">
@@ -82,13 +93,51 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Auto-rellenado: intenta cargar los datos al iniciar
+        // Se consulta Azure para mostrar también el estado actualizado de Stripe.
         await ApiService.RestoreAuthTokenAsync();
-        var datosCargados = await DatabaseHelper.ObtenerPerfilCompaniaAsync(ApiService.AuthenticatedUserId ?? 0);
-        if (datosCargados != null)
+        var companiaId = ApiService.AuthenticatedUserId ?? 0;
+        await ApiService.SincronizarResumenTarjetaAsync();
+        var datosRemotos = await ApiService.ObtenerCompaniaAsync(companiaId);
+        if (datosRemotos != null)
         {
-            perfil = datosCargados;
+            perfil = new PerfilCompania
+            {
+                Id = datosRemotos.Id,
+                FotoPerfil = datosRemotos.FotoPerfil,
+                NombreEmpresa = datosRemotos.NombreEmpresa,
+                Especialidad = datosRemotos.Especialidad,
+                Ciudad = datosRemotos.Ciudad,
+                Correo = datosRemotos.Correo,
+                Telefono = datosRemotos.Telefono,
+                Password = datosRemotos.Password,
+                FormaPago = datosRemotos.FormaPago,
+                MontoPago = datosRemotos.MontoPago.ToString(CultureInfo.InvariantCulture),
+                AceptaTerminos = datosRemotos.AceptaTerminos,
+                StripeCardholderName = datosRemotos.StripeCardholderName,
+                StripeCardBrand = datosRemotos.StripeCardBrand,
+                StripeCardLast4 = datosRemotos.StripeCardLast4,
+                StripeCardExpMonth = datosRemotos.StripeCardExpMonth,
+                StripeCardExpYear = datosRemotos.StripeCardExpYear
+            };
         }
+        else
+        {
+            var datosCargados = await DatabaseHelper.ObtenerPerfilCompaniaAsync(companiaId);
+            if (datosCargados != null)
+            {
+                perfil = datosCargados;
+            }
+        }
+    }
+
+    private string FormatearExpiracionTarjeta()
+    {
+        if (!perfil.StripeCardExpMonth.HasValue || !perfil.StripeCardExpYear.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return $"{perfil.StripeCardExpMonth:00}/{perfil.StripeCardExpYear % 100:00}";
     }
 
     private bool EsCorreoValido(string email)
@@ -134,18 +183,6 @@
         if (!long.TryParse(perfil.Telefono, out _))
         {
             mensajeError = "El campo Teléfono solo puede contener números enteros.";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(perfil.NumeroTarjeta) && !long.TryParse(perfil.NumeroTarjeta, out _))
-        {
-            mensajeError = "El campo Número de Tarjeta solo puede contener números enteros.";
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(perfil.CVC) && !int.TryParse(perfil.CVC, out _))
-        {
-            mensajeError = "El campo Código de Seguridad (CVC) solo puede contener números enteros.";
             return;
         }
 

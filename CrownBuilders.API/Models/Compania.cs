@@ -18,5 +18,10 @@
         public string? StripeSubscriptionId { get; set; }
         public string? StripeCheckoutSessionId { get; set; }
         public string StripePaymentStatus { get; set; } = "pending";
+        public string? StripeCardholderName { get; set; }
+        public string? StripeCardBrand { get; set; }
+        public string? StripeCardLast4 { get; set; }
+        public int? StripeCardExpMonth { get; set; }
+        public int? StripeCardExpYear { get; set; }
     }
 }

@@ -503,6 +503,26 @@ namespace CrownBuilders.Services
                 cancellationToken: cancellationToken);
         }
 
+        public async Task<bool> SincronizarResumenTarjetaAsync(
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await RestoreAuthTokenAsync();
+                using var response = await _httpClient.PostAsync(
+                    "Stripe/sync-payment-method",
+                    content: null,
+                    cancellationToken);
+                return response.IsSuccessStatusCode;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[STRIPE] No se pudo sincronizar el resumen de tarjeta: {ex.Message}");
+                return false;
+            }
+        }
+
         // --- SERVICIO DE SMS ---
 
         public async Task<string> EnviarSmsAsync(string telefono, string mensaje)

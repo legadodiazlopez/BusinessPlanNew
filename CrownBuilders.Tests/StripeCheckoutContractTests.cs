@@ -82,6 +82,25 @@ public sealed class StripeCheckoutContractTests
         Assert.Contains("cancel", returnService, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void StripeCheckout_PersistsOnlySafeCardSummary()
+    {
+        var controller = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders.API", "Controllers", "StripeController.cs")));
+        var editPage = File.ReadAllText(FindWorkspaceFile(
+            Path.Combine("CrownBuilders", "Components", "Pages", "EditarPerfilCompania.Razor")));
+
+        Assert.Contains("PaymentMethodService", controller, StringComparison.Ordinal);
+        Assert.Contains("Last4", controller, StringComparison.Ordinal);
+        Assert.Contains("ExpMonth", controller, StringComparison.Ordinal);
+        Assert.Contains("ExpYear", controller, StringComparison.Ordinal);
+        Assert.Contains("StripeCardholderName", editPage, StringComparison.Ordinal);
+        Assert.Contains("StripeCardLast4", editPage, StringComparison.Ordinal);
+        Assert.Contains("StripeCardExpMonth", editPage, StringComparison.Ordinal);
+        Assert.Contains("StripeCardExpYear", editPage, StringComparison.Ordinal);
+        Assert.DoesNotContain("@bind=\"perfil.CVC\"", editPage, StringComparison.Ordinal);
+    }
+
     private static Type FindStripeControllerType()
     {
         var controllerType = typeof(CrownBuilders.API.Services.FirebaseNotificationService).Assembly.GetType(

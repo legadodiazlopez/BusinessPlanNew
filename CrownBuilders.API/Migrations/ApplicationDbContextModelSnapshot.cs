@@ -67,6 +67,21 @@ namespace CrownBuilders.API.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("StripeCardBrand")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("StripeCardExpMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("StripeCardExpYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("StripeCardLast4")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("StripeCardholderName")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("StripeCheckoutSessionId")
                         .HasColumnType("nvarchar(max)");
 
