@@ -50,8 +50,8 @@ public sealed class StripeController : ControllerBase
                 Mode = "subscription",
                 CustomerEmail = compania.Correo,
                 ClientReferenceId = compania.Id.ToString(CultureInfo.InvariantCulture),
-                SuccessUrl = _stripeOptions.CheckoutSuccessUrl,
-                CancelUrl = _stripeOptions.CheckoutCancelUrl,
+                SuccessUrl = BuildCheckoutReturnUrl(_stripeOptions.CheckoutSuccessUrl, "success"),
+                CancelUrl = BuildCheckoutReturnUrl(_stripeOptions.CheckoutCancelUrl, "cancel"),
                 Locale = "es",
                 LineItems =
                 [
@@ -99,6 +99,30 @@ public sealed class StripeController : ControllerBase
             return StatusCode(StatusCodes.Status500InternalServerError,
                 new { error = "No se pudo iniciar el pago." });
         }
+    }
+
+    [AllowAnonymous]
+    [HttpGet("checkout-return/{result}")]
+    public IActionResult CheckoutReturn(string result)
+    {
+        if (!string.Equals(result, "success", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(result, "cancel", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound();
+        }
+
+        return Redirect($"crownbuilders://checkout/{result.ToLowerInvariant()}");
+    }
+
+    private string BuildCheckoutReturnUrl(string configuredUrl, string result)
+    {
+        if (Uri.TryCreate(configuredUrl, UriKind.Absolute, out var configuredUri) &&
+            string.Equals(configuredUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return configuredUri.ToString();
+        }
+
+        return $"{_stripeOptions.PublicBaseUrl.TrimEnd('/')}/api/Stripe/checkout-return/{result}";
     }
 
     [AllowAnonymous]
