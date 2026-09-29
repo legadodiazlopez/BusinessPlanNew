@@ -42,18 +42,41 @@
         <div class="row">
             @foreach (var c in CompaniasFiltradas)
             {
-                <div class="col-md-6 mb-4">
+                <div class="col-md-6 mb-4" @key="c.Id">
                     <div class="card shadow-sm h-100 card-custom cb-directory-card">
                         <div class="card-body cb-directory-card__body">
                             <div class="d-flex align-items-center mb-3 cb-directory-card__identity">
                                 <div class="cb-avatar d-flex align-items-center justify-content-center fw-bold text-navy me-3">
-                                    @(string.IsNullOrEmpty(c.Nombre) ? "C" : c.Nombre.Substring(0, 1).ToUpper())
+                                    @if (c.TieneFotoPerfil && !fotosFallidas.Contains(c.Id))
+                                    {
+                                        <img class="cb-directory-card__photo"
+                                             src="@ObtenerRutaFoto(c.Id)"
+                                             alt="Foto de @c.Nombre"
+                                             loading="lazy"
+                                             @onerror="() => MarcarFotoFallida(c.Id)" />
+                                    }
+                                    else
+                                    {
+                                        @(string.IsNullOrEmpty(c.Nombre) ? "C" : c.Nombre.Substring(0, 1).ToUpper())
+                                    }
                                 </div>
                                 <div class="cb-directory-card__company">
                                     <h5 class="fw-bold text-navy m-0">@c.Nombre</h5>
                                     <small class="text-muted">@c.Ciudad</small>
                                 </div>
                             </div>
+                            @if (c.TotalResenas > 0)
+                            {
+                                <div class="cb-directory-card__ratings small" aria-label="Calificaciones de @c.TotalResenas reseñas">
+                                    <div class="d-flex justify-content-between gap-2"><span>Puntualidad:</span><span class="cb-directory-card__stars" aria-label="@c.Puntualidad.ToString("F1") de 5">@GenerarEstrellas(c.Puntualidad)</span></div>
+                                    <div class="d-flex justify-content-between gap-2"><span>Pagos a tiempo:</span><span class="cb-directory-card__stars" aria-label="@c.Pagos.ToString("F1") de 5">@GenerarEstrellas(c.Pagos)</span></div>
+                                    <div class="d-flex justify-content-between gap-2"><span>Trato humano:</span><span class="cb-directory-card__stars" aria-label="@c.Trato.ToString("F1") de 5">@GenerarEstrellas(c.Trato)</span></div>
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="cb-directory-card__ratings small text-muted mb-0">Sin reseñas todavía</p>
+                            }
                             <p class="card-text small text-muted border-top pt-2 mb-1 cb-directory-card__specialty">Especialidad: <strong>@c.Especialidad</strong></p>
 
                             <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-3 cb-directory-card__footer">
@@ -94,6 +117,7 @@
     private bool mostrarConfig = false;
     private bool estaDisponible = true;
     private bool estaCargando = true;
+    private readonly HashSet<int> fotosFallidas = new();
 
     private CrownBuilders.Trabajador trabajador = new CrownBuilders.Trabajador();
     private List<Compania> listaCompanias = new List<Compania>();
@@ -163,12 +187,11 @@
         public string Especialidad { get; set; } = string.Empty;
         public string FormaPago { get; set; } = string.Empty;
         public double MontoPago { get; set; }
-        
-        // Mantengo estas propiedades ocultas en la clase por si la API las sigue enviando
-        // y así evitamos errores de deserialización, aunque ya no se muestren en pantalla.
-        public int Puntualidad { get; set; } = 5;
-        public int Pagos { get; set; } = 5;
-        public int Trato { get; set; } = 5;
+        public bool TieneFotoPerfil { get; set; }
+        public int TotalResenas { get; set; }
+        public double Puntualidad { get; set; }
+        public double Pagos { get; set; }
+        public double Trato { get; set; }
     }
 
     private IEnumerable<Compania> CompaniasFiltradas => listaCompanias
@@ -196,10 +219,18 @@
             Especialidad = compania.Especialidad ?? string.Empty,
             FormaPago = compania.FormaPago ?? string.Empty,
             MontoPago = (double)compania.MontoPago,
-            Puntualidad = 5,
-            Pagos = 5,
-            Trato = 5
+            TieneFotoPerfil = !string.IsNullOrWhiteSpace(compania.FotoPerfil)
         };
+    }
+
+    private static string ObtenerRutaFoto(int id) => $"{ApiEndpoints.ApiBaseUrl}Perfil/foto-compania/{id}";
+
+    private void MarcarFotoFallida(int id) => fotosFallidas.Add(id);
+
+    private static string GenerarEstrellas(double calificacion)
+    {
+        var llenas = (int)Math.Round(Math.Clamp(calificacion, 0, 5), MidpointRounding.AwayFromZero);
+        return new string('★', llenas) + new string('☆', 5 - llenas);
     }
 
     public static string ObtenerEtiquetaFormaPago(string? formaPago) =>

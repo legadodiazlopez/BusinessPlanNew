@@ -44,18 +44,7 @@ namespace CrownBuilders.API.Controllers
         {
             try
             {
-                var companias = await _context.Companias
-                    .AsNoTracking()
-                    .Select(compania => new CompanyDirectoryItemResponse
-                    {
-                        Id = compania.Id,
-                        NombreEmpresa = compania.NombreEmpresa,
-                        Especialidad = compania.Especialidad,
-                        Ciudad = compania.Ciudad,
-                        FormaPago = compania.FormaPago,
-                        MontoPago = compania.MontoPago
-                    })
-                    .ToListAsync(cancellationToken);
+                var companias = await CompanyDirectoryQuery.LoadAsync(_context, cancellationToken);
                 return Ok(companias);
             }
             catch (Exception ex)

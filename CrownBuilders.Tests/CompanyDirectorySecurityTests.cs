@@ -3,6 +3,7 @@ using CrownBuilders.API.Controllers;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using CrownBuilders.API.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -43,6 +44,48 @@ public sealed class CompanyDirectorySecurityTests
         AssertPublicDirectoryPayload(ok.Value);
     }
 
+    [Fact]
+    public async Task Directory_ReturnsPhotoAvailabilityAndActualCompanyRatings()
+    {
+        await using var context = CreateContext();
+        context.Companias.Add(CreateCompany());
+        context.Resenas.AddRange(
+            new Resena { ReceptorId = 1, TipoReceptor = "Compania", Calificacion1 = 5, Calificacion2 = 4, Calificacion3 = 3 },
+            new Resena { ReceptorId = 1, TipoReceptor = "Compania", Calificacion1 = 3, Calificacion2 = 2, Calificacion3 = 5 },
+            new Resena { ReceptorId = 1, TipoReceptor = "Trabajador", Calificacion1 = 1, Calificacion2 = 1, Calificacion3 = 1 });
+        await context.SaveChangesAsync();
+
+        var directory = await CompanyDirectoryQuery.LoadAsync(context, CancellationToken.None);
+
+        var company = Assert.Single(directory);
+        Assert.True(company.TieneFotoPerfil);
+        Assert.Equal(2, company.TotalResenas);
+        Assert.Equal(4d, company.Puntualidad);
+        Assert.Equal(3d, company.Pagos);
+        Assert.Equal(4d, company.Trato);
+    }
+
+    [Fact]
+    public async Task CompanyPhoto_ReturnsOnlyImageBytes()
+    {
+        await using var context = CreateContext();
+        var company = CreateCompany();
+        company.FotoPerfil = "data:image/png;base64,AQID";
+        context.Companias.Add(company);
+        await context.SaveChangesAsync();
+        var controller = new PerfilController(context)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
+
+        var result = await controller.GetCompanyPhoto(company.Id, CancellationToken.None);
+
+        var photo = Assert.IsType<FileContentResult>(result);
+        Assert.Equal("image/png", photo.ContentType);
+        Assert.Equal(new byte[] { 1, 2, 3 }, photo.FileContents);
+        Assert.Equal("nosniff", controller.Response.Headers["X-Content-Type-Options"]);
+    }
+
     private static void AssertPublicDirectoryPayload(object? value)
     {
         var json = JsonSerializer.Serialize(value, new JsonSerializerOptions(JsonSerializerDefaults.Web));
@@ -52,7 +95,8 @@ public sealed class CompanyDirectorySecurityTests
         Assert.Contains("ciudad", json);
         Assert.Contains("formaPago", json);
         Assert.Contains("montoPago", json);
-        Assert.DoesNotContain("fotoPerfil", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"tieneFotoPerfil\":true", json);
+        Assert.DoesNotContain("\"fotoPerfil\":", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("correo", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("telefono", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("password", json, StringComparison.OrdinalIgnoreCase);

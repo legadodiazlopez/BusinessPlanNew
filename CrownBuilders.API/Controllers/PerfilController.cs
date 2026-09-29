@@ -2,6 +2,7 @@
 using CrownBuilders.API.Contracts;
 using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
+using CrownBuilders.API.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace CrownBuilders.API.Controllers
@@ -122,23 +123,72 @@ namespace CrownBuilders.API.Controllers
         {
             try
             {
-                var companias = await _context.Companias
-                    .AsNoTracking()
-                    .Select(compania => new CompanyDirectoryItemResponse
-                    {
-                        Id = compania.Id,
-                        NombreEmpresa = compania.NombreEmpresa,
-                        Especialidad = compania.Especialidad,
-                        Ciudad = compania.Ciudad,
-                        FormaPago = compania.FormaPago,
-                        MontoPago = compania.MontoPago
-                    })
-                    .ToListAsync(cancellationToken);
+                var companias = await CompanyDirectoryQuery.LoadAsync(_context, cancellationToken);
                 return Ok(companias);
             }
             catch (Exception)
             {
                 return StatusCode(500, new { exitoso = false, mensaje = "Error en el servidor" });
+            }
+        }
+
+        [HttpGet("foto-compania/{id:int}")]
+        public async Task<IActionResult> GetCompanyPhoto(int id, CancellationToken cancellationToken)
+        {
+            var photoData = await _context.Companias
+                .AsNoTracking()
+                .Where(company => company.Id == id)
+                .Select(company => company.FotoPerfil)
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(photoData))
+            {
+                return NotFound();
+            }
+
+            if (!TryReadPhoto(photoData, out var content, out var contentType))
+            {
+                return UnprocessableEntity(new { error = "La foto de perfil no tiene un formato válido." });
+            }
+
+            Response.Headers["Cache-Control"] = "no-store";
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            return File(content, contentType);
+        }
+
+        private static bool TryReadPhoto(string dataUri, out byte[] content, out string contentType)
+        {
+            content = Array.Empty<byte>();
+            contentType = string.Empty;
+
+            var separator = dataUri.IndexOf(',');
+            if (separator < 0)
+            {
+                return false;
+            }
+
+            contentType = dataUri[..separator].ToLowerInvariant() switch
+            {
+                "data:image/png;base64" => "image/png",
+                "data:image/jpeg;base64" => "image/jpeg",
+                "data:image/webp;base64" => "image/webp",
+                "data:image/gif;base64" => "image/gif",
+                _ => string.Empty
+            };
+
+            if (contentType.Length == 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                content = Convert.FromBase64String(dataUri[(separator + 1)..]);
+                return content.Length > 0;
+            }
+            catch (FormatException)
+            {
+                return false;
             }
         }
 

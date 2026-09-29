@@ -53,7 +53,7 @@
                     <span class="text-muted small" style="font-size: 0.85em; text-align: center; color: #C5A059; font-weight: bold;">Agregar Foto</span>
                 }
             </label>
-            <InputFile id="fotoUpload" OnChange="HandleFotoUpload" class="d-none" disabled="@cargando" />
+            <InputFile id="fotoUpload" OnChange="HandleFotoUpload" class="d-none" accept="image/*" disabled="@cargando" />
         </div>
         
         @if (string.IsNullOrEmpty(perfil.FotoPerfil))
@@ -368,18 +368,29 @@
         try
         {
             var file = e.File;
-            if (file != null)
+            if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
             {
-                using var stream = file.OpenReadStream(maxAllowedSize: 1024 * 1024 * 5);
-                using var ms = new System.IO.MemoryStream();
-                await stream.CopyToAsync(ms);
-                var bytes = ms.ToArray();
-                perfil.FotoPerfil = $"data:{file.ContentType};base64,{Convert.ToBase64String(bytes)}";
+                mensajeError = "Selecciona un archivo de imagen válido.";
+                return;
             }
+
+            if (file.Size > 1024 * 1024 * 5)
+            {
+                mensajeError = "La foto no debe superar los 5 MB.";
+                return;
+            }
+
+            var resizedImage = await file.RequestImageFileAsync("image/png", 256, 256);
+            using var stream = resizedImage.OpenReadStream(maxAllowedSize: 1024 * 1024 * 5);
+            using var ms = new System.IO.MemoryStream();
+            await stream.CopyToAsync(ms);
+            perfil.FotoPerfil = $"data:image/png;base64,{Convert.ToBase64String(ms.ToArray())}";
+            mensajeError = string.Empty;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            System.Diagnostics.Debug.WriteLine($"Error cargando foto: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[FOTO COMPAÑÍA] No se pudo procesar la imagen: {exception.GetType().Name}");
+            mensajeError = "No se pudo procesar la foto. Prueba con una imagen JPG o PNG.";
         }
     }
 

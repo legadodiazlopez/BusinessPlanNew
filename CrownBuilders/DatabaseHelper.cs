@@ -334,7 +334,12 @@ namespace CrownBuilders
                     Especialidad = compania.Especialidad,
                     Ciudad = compania.Ciudad,
                     FormaPago = compania.FormaPago,
-                    MontoPago = compania.MontoPago
+                    MontoPago = compania.MontoPago,
+                    TieneFotoPerfil = compania.TieneFotoPerfil,
+                    TotalResenas = compania.TotalResenas,
+                    Puntualidad = compania.Puntualidad,
+                    Pagos = compania.Pagos,
+                    Trato = compania.Trato
                 }).ToList();
 
                 await _db.RunInTransactionAsync(connection =>
@@ -374,9 +379,11 @@ namespace CrownBuilders
             Especialidad = compania.Especialidad,
             FormaPago = compania.FormaPago,
             MontoPago = (double)compania.MontoPago,
-            Puntualidad = 5,
-            Pagos = 5,
-            Trato = 5
+            TieneFotoPerfil = compania.TieneFotoPerfil,
+            TotalResenas = compania.TotalResenas,
+            Puntualidad = compania.Puntualidad,
+            Pagos = compania.Pagos,
+            Trato = compania.Trato
         };
 
         public static async Task<PerfilCompania> ObtenerCompaniaPorIdAsync(int id)
