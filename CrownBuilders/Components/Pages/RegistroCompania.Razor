@@ -89,7 +89,7 @@
         <input class="form-control" type="number" min="0" @bind="perfil.MontoPago" disabled="@cargando" />
         
         <div class="alert alert-info mt-2" style="font-size: 0.9em; padding: 10px;">
-            <strong>Pago seguro:</strong> después de crear la cuenta serás enviado a Stripe Checkout para completar la suscripción. Crown Builders no recibe ni guarda los datos de tu tarjeta.
+            <strong>Pago seguro:</strong> después de crear tu cuenta continuarás en Stripe Checkout. Crown Builders no recibe ni guarda los datos de tu tarjeta.
         </div>
         
         <div class="form-check mb-3 d-flex align-items-center ps-0">
@@ -309,18 +309,43 @@
                     return;
                 }
 
-                var checkout = await ApiService.CrearCheckoutSessionAsync();
-                if (!string.IsNullOrWhiteSpace(checkout?.CheckoutUrl))
+                string? resultadoCheckout = null;
+                try
                 {
-                    await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(checkout.CheckoutUrl);
+                    var checkout = await ApiService.CrearCheckoutSessionAsync();
+                    if (!string.IsNullOrWhiteSpace(checkout?.CheckoutUrl))
+                    {
+                        await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(checkout.CheckoutUrl);
+                    }
+                    else
+                    {
+                        resultadoCheckout = "no-disponible";
+                    }
                 }
-                else
+                catch (HttpRequestException)
                 {
-                    await JS.InvokeVoidAsync(
-                        "alert",
-                        "Cuenta creada. El pago quedó pendiente porque Stripe todavía no está configurado.");
+                    resultadoCheckout = "no-disponible";
                 }
-                Navigation.NavigateTo("/portal-compania");
+                catch (TaskCanceledException)
+                {
+                    resultadoCheckout = "no-disponible";
+                }
+                catch (InvalidOperationException)
+                {
+                    resultadoCheckout = "no-disponible";
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    resultadoCheckout = "no-disponible";
+                }
+                catch (NotSupportedException)
+                {
+                    resultadoCheckout = "no-disponible";
+                }
+
+                Navigation.NavigateTo(resultadoCheckout is null
+                    ? "/portal-compania"
+                    : $"/portal-compania?checkout={resultadoCheckout}");
             }
             else
             {

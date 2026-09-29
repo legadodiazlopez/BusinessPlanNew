@@ -67,6 +67,10 @@ main {
 }
 
 @media (max-width: 640.98px) {
+    .sidebar {
+        display: none;
+    }
+
     .cb-topbar {
         min-height: 54px;
         padding: 8px 0.75rem;

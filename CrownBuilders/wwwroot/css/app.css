@@ -337,6 +337,25 @@ a, .btn-link {
     height: 3.75rem;
 }
 
+.cb-directory-card__company {
+    min-width: 0;
+}
+
+.cb-directory-card__company h5 {
+    overflow-wrap: anywhere;
+}
+
+.cb-directory-card__price {
+    font-size: clamp(1rem, 4vw, 1.35rem);
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.cb-directory-card__contact {
+    flex: 0 0 auto;
+    padding-inline: 0.9rem;
+}
+
 .cb-empty-state {
     background-color: rgba(255, 255, 255, 0.72);
     border: 1px dashed var(--cb-border);
@@ -431,6 +450,18 @@ a, .btn-link {
 
     .cb-chat-header > div:last-child {
         justify-content: flex-end;
+    }
+}
+
+@media (max-width: 380px) {
+    .cb-directory-card__footer {
+        align-items: stretch !important;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .cb-directory-card__contact {
+        width: 100%;
     }
 }
 

@@ -483,6 +483,8 @@ namespace CrownBuilders.Services
             await RestoreAuthTokenAsync();
             if (string.IsNullOrWhiteSpace(_authToken))
             {
+                System.Diagnostics.Debug.WriteLine(
+                    "[STRIPE] No se inició Checkout porque no hay una sesión autenticada.");
                 return null;
             }
 
@@ -492,6 +494,8 @@ namespace CrownBuilders.Services
                 cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[STRIPE] No se pudo iniciar Checkout. HTTP {(int)response.StatusCode} ({response.StatusCode}).");
                 return null;
             }
 

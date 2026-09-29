@@ -43,22 +43,22 @@
             @foreach (var c in CompaniasFiltradas)
             {
                 <div class="col-md-6 mb-4">
-                    <div class="card shadow-sm h-100 card-custom">
-                        <div class="card-body">
-                            <div class="d-flex align-items-center mb-3">
+                    <div class="card shadow-sm h-100 card-custom cb-directory-card">
+                        <div class="card-body cb-directory-card__body">
+                            <div class="d-flex align-items-center mb-3 cb-directory-card__identity">
                                 <div class="cb-avatar d-flex align-items-center justify-content-center fw-bold text-navy me-3">
                                     @(string.IsNullOrEmpty(c.Nombre) ? "C" : c.Nombre.Substring(0, 1).ToUpper())
                                 </div>
-                                <div>
+                                <div class="cb-directory-card__company">
                                     <h5 class="fw-bold text-navy m-0">@c.Nombre</h5>
                                     <small class="text-muted">@c.Ciudad</small>
                                 </div>
                             </div>
-                            <p class="card-text small text-muted border-top pt-2 mb-1">Especialidad: <strong>@c.Especialidad</strong></p>
+                            <p class="card-text small text-muted border-top pt-2 mb-1 cb-directory-card__specialty">Especialidad: <strong>@c.Especialidad</strong></p>
 
-                            <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-3">
-                                <span class="fw-bold text-navy fs-5">$@c.MontoPago.ToString("F2") @ObtenerEtiquetaFormaPago(c.FormaPago)</span>
-                                <button class="btn btn-gold px-4" @onclick="() => ContactarCompania(c)">Contactar</button>
+                            <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-3 cb-directory-card__footer">
+                                <span class="fw-bold text-navy cb-directory-card__price">$@c.MontoPago.ToString("F2") @ObtenerEtiquetaFormaPago(c.FormaPago)</span>
+                                <button class="btn btn-gold px-4 cb-directory-card__contact" @onclick="() => ContactarCompania(c)">Contactar</button>
                             </div>
                         </div>
                     </div>

@@ -22,6 +22,14 @@
     {
         <div class="alert @(checkoutExitoso ? "alert-success" : "alert-warning") shadow-sm" role="status">
             @mensajeCheckout
+            @if (CheckoutNeedsRetry)
+            {
+                <button class="btn btn-sm btn-cb-primary d-block mt-2"
+                        @onclick="ReintentarCheckout"
+                        disabled="@reintentandoCheckout">
+                    @(reintentandoCheckout ? "Abriendo pago..." : "Reintentar pago")
+                </button>
+            }
         </div>
     }
 
@@ -148,6 +156,7 @@
     private bool estaCargando = true;
     private string? mensajeCheckout;
     private bool checkoutExitoso;
+    private bool reintentandoCheckout;
 
     [SupplyParameterFromQuery(Name = "checkout")]
     public string? CheckoutResult { get; set; }
@@ -163,13 +172,64 @@
 
     protected override void OnInitialized()
     {
+        _ = CargarDatosPortalAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
         checkoutExitoso = string.Equals(CheckoutResult, "success", StringComparison.OrdinalIgnoreCase);
         mensajeCheckout = checkoutExitoso
             ? "Regresaste de Stripe. La suscripción se confirmará mediante el webhook."
             : string.Equals(CheckoutResult, "cancel", StringComparison.OrdinalIgnoreCase)
                 ? "El pago fue cancelado. Puedes intentarlo nuevamente."
-                : null;
-        _ = CargarDatosPortalAsync();
+                : CheckoutNeedsRetry
+                    ? "Tu cuenta se creó, pero no pudimos iniciar el pago. Comprueba tu conexión e inténtalo de nuevo."
+                    : null;
+    }
+
+    private bool CheckoutNeedsRetry =>
+        string.Equals(CheckoutResult, "no-disponible", StringComparison.OrdinalIgnoreCase);
+
+    private async Task ReintentarCheckout()
+    {
+        reintentandoCheckout = true;
+        try
+        {
+            var checkout = await ApiService.CrearCheckoutSessionAsync();
+            if (!string.IsNullOrWhiteSpace(checkout?.CheckoutUrl))
+            {
+                await Microsoft.Maui.ApplicationModel.Launcher.OpenAsync(checkout.CheckoutUrl);
+                mensajeCheckout = null;
+            }
+            else
+            {
+                mensajeCheckout = "No pudimos iniciar el pago. Comprueba tu conexión e inténtalo de nuevo.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            mensajeCheckout = "No pudimos conectar para iniciar el pago. Comprueba tu conexión e inténtalo de nuevo.";
+        }
+        catch (TaskCanceledException)
+        {
+            mensajeCheckout = "La solicitud de pago tardó demasiado. Inténtalo de nuevo.";
+        }
+        catch (InvalidOperationException)
+        {
+            mensajeCheckout = "No se pudo abrir la página de pago. Inténtalo de nuevo.";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            mensajeCheckout = "No pudimos iniciar el pago. Inténtalo de nuevo.";
+        }
+        catch (NotSupportedException)
+        {
+            mensajeCheckout = "No se pudo abrir la página de pago. Inténtalo de nuevo.";
+        }
+        finally
+        {
+            reintentandoCheckout = false;
+        }
     }
 
     private async Task CargarDatosPortalAsync()
