@@ -11,14 +11,36 @@ public sealed class StripeOptions
 
     public void ValidateForCheckout()
     {
-        if (string.IsNullOrWhiteSpace(SecretKey) ||
-            string.IsNullOrWhiteSpace(SubscriptionPriceId) ||
-            string.IsNullOrWhiteSpace(CheckoutSuccessUrl) ||
-            string.IsNullOrWhiteSpace(CheckoutCancelUrl) ||
-            string.IsNullOrWhiteSpace(PublicBaseUrl))
+        var missingSettings = new List<string>();
+        if (string.IsNullOrWhiteSpace(SecretKey))
+        {
+            missingSettings.Add("Stripe:SecretKey");
+        }
+
+        if (string.IsNullOrWhiteSpace(SubscriptionPriceId))
+        {
+            missingSettings.Add("Stripe:SubscriptionPriceId");
+        }
+
+        if (string.IsNullOrWhiteSpace(CheckoutSuccessUrl))
+        {
+            missingSettings.Add("Stripe:CheckoutSuccessUrl");
+        }
+
+        if (string.IsNullOrWhiteSpace(CheckoutCancelUrl))
+        {
+            missingSettings.Add("Stripe:CheckoutCancelUrl");
+        }
+
+        if (string.IsNullOrWhiteSpace(PublicBaseUrl))
+        {
+            missingSettings.Add("Stripe:PublicBaseUrl");
+        }
+
+        if (missingSettings.Count > 0)
         {
             throw new InvalidOperationException(
-                "La configuración de Stripe Checkout está incompleta.");
+                $"La configuración de Stripe Checkout está incompleta. Faltan: {string.Join(", ", missingSettings)}.");
         }
 
         if (!Uri.TryCreate(CheckoutSuccessUrl, UriKind.Absolute, out _) ||
