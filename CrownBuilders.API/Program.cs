@@ -57,7 +57,33 @@ if (string.IsNullOrWhiteSpace(jwtOptions.Key) || jwtOptions.Key.Length < 32)
 
 builder.Services.AddSingleton(jwtOptions);
 builder.Services.AddSingleton<JwtTokenService>();
-builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
+string ResolveStripeSetting(string settingName, string currentValue)
+{
+    if (!string.IsNullOrWhiteSpace(currentValue))
+    {
+        return currentValue.Trim();
+    }
+
+    return builder.Configuration[$"Stripe:{settingName}"]?.Trim()
+        ?? Environment.GetEnvironmentVariable($"Stripe__{settingName}")?.Trim()
+        ?? Environment.GetEnvironmentVariable($"Stripe:{settingName}")?.Trim()
+        ?? string.Empty;
+}
+
+builder.Services.AddOptions<StripeOptions>()
+    .Bind(builder.Configuration.GetSection("Stripe"))
+    .PostConfigure(options =>
+    {
+        options.SecretKey = ResolveStripeSetting(nameof(StripeOptions.SecretKey), options.SecretKey);
+        options.SubscriptionPriceId = ResolveStripeSetting(
+            nameof(StripeOptions.SubscriptionPriceId), options.SubscriptionPriceId);
+        options.WebhookSecret = ResolveStripeSetting(nameof(StripeOptions.WebhookSecret), options.WebhookSecret);
+        options.CheckoutSuccessUrl = ResolveStripeSetting(
+            nameof(StripeOptions.CheckoutSuccessUrl), options.CheckoutSuccessUrl);
+        options.CheckoutCancelUrl = ResolveStripeSetting(
+            nameof(StripeOptions.CheckoutCancelUrl), options.CheckoutCancelUrl);
+        options.PublicBaseUrl = ResolveStripeSetting(nameof(StripeOptions.PublicBaseUrl), options.PublicBaseUrl);
+    });
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
