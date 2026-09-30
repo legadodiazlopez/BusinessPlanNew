@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Stripe;
+using Stripe.BillingPortal;
 using Stripe.Checkout;
 
 namespace CrownBuilders.API.Controllers;
@@ -30,6 +31,72 @@ public sealed class StripeController : ControllerBase
     }
 
     [Authorize(Roles = "compania")]
+    [HttpPost("crear-sesion-portal")]
+    public async Task<IActionResult> CrearSesionPortal(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var authenticatedUser = AuthenticatedUserAccessor.FromPrincipal(User);
+            var compania = await _context.Companias
+                .SingleOrDefaultAsync(c => c.Id == authenticatedUser.UserId, cancellationToken);
+
+            if (compania is null)
+            {
+                return NotFound(new { error = "Compañía no encontrada." });
+            }
+
+            StripeConfiguration.ApiKey = _stripeOptions.SecretKey;
+
+            if (string.IsNullOrWhiteSpace(compania.StripeCustomerId))
+            {
+                var customerOptions = new CustomerCreateOptions
+                {
+                    Email = compania.Correo,
+                    Name = compania.NombreEmpresa,
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["company_id"] = compania.Id.ToString(CultureInfo.InvariantCulture)
+                    }
+                };
+
+                var customerService = new CustomerService();
+                var customer = await customerService.CreateAsync(customerOptions, cancellationToken: cancellationToken);
+
+                compania.StripeCustomerId = customer.Id;
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            var options = new Stripe.BillingPortal.SessionCreateOptions
+            {
+                Customer = compania.StripeCustomerId,
+                ReturnUrl = _stripeOptions.PublicBaseUrl
+            };
+
+            var service = new Stripe.BillingPortal.SessionService();
+            Stripe.BillingPortal.Session session = await service.CreateAsync(options, cancellationToken: cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(session.Url))
+            {
+                throw new StripeException("Stripe no devolvió una URL del Portal de Clientes.");
+            }
+
+            return Ok(new PortalSessionResponse(session.Url));
+        }
+        catch (StripeException exception)
+        {
+            _logger.LogError(exception, "Stripe rechazó la creación de la sesión del portal.");
+            return StatusCode(StatusCodes.Status502BadGateway,
+                new { error = "Stripe no pudo generar la sesión para la gestión de tarjetas." });
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Error inesperado creando sesión del portal.");
+            return StatusCode(StatusCodes.Status500InternalServerError,
+                new { error = "No se pudo abrir el portal de gestión de tarjetas." });
+        }
+    }
+
+    [Authorize(Roles = "compania")]
     [HttpPost("create-checkout-session")]
     public async Task<IActionResult> CreateCheckoutSession(CancellationToken cancellationToken)
     {
@@ -46,7 +113,7 @@ public sealed class StripeController : ControllerBase
             }
 
             StripeConfiguration.ApiKey = _stripeOptions.SecretKey;
-            var sessionOptions = new SessionCreateOptions
+            var sessionOptions = new Stripe.Checkout.SessionCreateOptions
             {
                 Mode = "subscription",
                 CustomerEmail = compania.Correo,
@@ -68,7 +135,7 @@ public sealed class StripeController : ControllerBase
                 }
             };
 
-            var session = await new SessionService().CreateAsync(
+            var session = await new Stripe.Checkout.SessionService().CreateAsync(
                 sessionOptions,
                 cancellationToken: cancellationToken);
             if (string.IsNullOrWhiteSpace(session.Url))
@@ -225,7 +292,7 @@ public sealed class StripeController : ControllerBase
 
     private async Task ProcessCheckoutCompletedAsync(Event stripeEvent, CancellationToken cancellationToken)
     {
-        if (stripeEvent.Data.Object is not Session session ||
+        if (stripeEvent.Data.Object is not Stripe.Checkout.Session session ||
             !session.Metadata.TryGetValue("company_id", out var companyIdValue) ||
             !int.TryParse(companyIdValue, NumberStyles.None, CultureInfo.InvariantCulture, out var companyId))
         {
@@ -313,7 +380,7 @@ public sealed class StripeController : ControllerBase
             if (!string.IsNullOrWhiteSpace(checkoutSessionId) &&
                 (paymentMethod is null || string.IsNullOrWhiteSpace(fallbackCardholderName)))
             {
-                var checkoutSession = await new SessionService().GetAsync(
+                var checkoutSession = await new Stripe.Checkout.SessionService().GetAsync(
                     checkoutSessionId,
                     new SessionGetOptions
                     {
@@ -398,3 +465,4 @@ public sealed class StripeController : ControllerBase
 }
 
 public sealed record CheckoutSessionResponse(string CheckoutUrl);
+public sealed record PortalSessionResponse(string Url);

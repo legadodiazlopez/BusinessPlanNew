@@ -5,6 +5,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject ApiService ApiService
+@inject StripeService StripeService
 
 <div class="container mt-4">
     <h3>Editar Perfil de Compañía</h3>
@@ -75,8 +76,21 @@
         }
         else
         {
-            <div class="form-text">Completa Stripe Checkout para que aparezca el resumen de tu tarjeta.</div>
+            <div class="form-text mb-2">Completa Stripe Checkout para que aparezca el resumen de tu tarjeta.</div>
         }
+
+        <div class="mt-3">
+            <button type="button" class="btn text-white fw-bold w-100" style="background-color: #C5A059; border-radius: 6px;" @onclick="AbrirPortalStripe" disabled="@cargandoPortal">
+                @if (cargandoPortal)
+                {
+                    <span>Cargando...</span>
+                }
+                else
+                {
+                    <span>Editar información de pago</span>
+                }
+            </button>
+        </div>
     </div>
 
     <div class="d-flex mt-4">
@@ -88,6 +102,7 @@
 @code {
     private PerfilCompania perfil = new PerfilCompania();
     private string mensajeError;
+    private bool cargandoPortal = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -125,6 +140,35 @@
             {
                 perfil = datosCargados;
             }
+        }
+    }
+
+    private async Task AbrirPortalStripe()
+    {
+        try
+        {
+            cargandoPortal = true;
+            mensajeError = "";
+
+            var urlPortal = await StripeService.CrearSesionPortalAsync(perfil.Id.ToString());
+
+            if (!string.IsNullOrWhiteSpace(urlPortal))
+            {
+                await JS.InvokeVoidAsync("alert", $"URL generada: {urlPortal}");
+                Navigation.NavigateTo(urlPortal, forceLoad: true);
+            }
+            else
+            {
+                mensajeError = "El servidor devolvió respuesta sin URL. Verifica si la compañía tiene CustomerId registrado en Stripe.";
+            }
+        }
+        catch (Exception ex)
+        {
+            mensajeError = $"Error en la llamada: {ex.Message}";
+        }
+        finally
+        {
+            cargandoPortal = false;
         }
     }
 

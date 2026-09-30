@@ -22,4 +22,27 @@ public sealed class StripeService
 
         return response.IsSuccessStatusCode;
     }
+
+    public async Task<string?> CrearSesionPortalAsync(
+        string customerId,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            "stripe/crear-sesion-portal",
+            customerId,
+            cancellationToken);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var resultado = await response.Content.ReadFromJsonAsync<PortalResponse>(cancellationToken: cancellationToken);
+            return resultado?.Url;
+        }
+
+        return null;
+    }
+
+    private sealed class PortalResponse
+    {
+        public string Url { get; set; } = string.Empty;
+    }
 }
