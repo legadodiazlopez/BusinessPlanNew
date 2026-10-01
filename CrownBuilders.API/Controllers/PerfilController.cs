@@ -4,6 +4,7 @@ using CrownBuilders.API.Data;
 using CrownBuilders.API.Models;
 using CrownBuilders.API.Services;
 using Microsoft.EntityFrameworkCore;
+using Stripe;
 
 namespace CrownBuilders.API.Controllers
 {
@@ -26,7 +27,7 @@ namespace CrownBuilders.API.Controllers
             {
                 var correo = request.Correo.Trim().ToLowerInvariant();
                 System.Diagnostics.Debug.WriteLine($"[API] Recibiendo registro compañía: {correo}");
-                
+
                 var existe = await _context.Companias
                     .AnyAsync(c => c.Correo == correo);
 
@@ -261,7 +262,7 @@ namespace CrownBuilders.API.Controllers
         }
 
         // --- ELIMINAR COMPAÑÍA ---
-        [HttpDelete("compania/{id}")]
+        [HttpDelete("eliminar-compania/{id}")]
         public async Task<IActionResult> DeleteCompania(int id)
         {
             try
@@ -270,6 +271,35 @@ namespace CrownBuilders.API.Controllers
                 if (compania == null)
                 {
                     return NotFound(new { exitoso = false, mensaje = "Compañía no encontrada" });
+                }
+
+                // Cancelar suscripción activa en Stripe utilizando el correo de la compañía
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(compania.Correo))
+                    {
+                        var customerService = new CustomerService();
+                        var customerOptions = new CustomerListOptions { Email = compania.Correo.Trim(), Limit = 1 };
+                        var customers = await customerService.ListAsync(customerOptions);
+                        var customer = customers.Data.FirstOrDefault();
+
+                        if (customer != null)
+                        {
+                            var subscriptionService = new SubscriptionService();
+                            var subscriptionOptions = new SubscriptionListOptions { Customer = customer.Id, Status = "active" };
+                            var subscriptions = await subscriptionService.ListAsync(subscriptionOptions);
+
+                            foreach (var subscription in subscriptions.Data)
+                            {
+                                await subscriptionService.CancelAsync(subscription.Id);
+                                System.Diagnostics.Debug.WriteLine($"[STRIPE] Suscripción {subscription.Id} cancelada para el cliente {customer.Id}");
+                            }
+                        }
+                    }
+                }
+                catch (Exception stripeEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[STRIPE] Error al cancelar suscripción en Stripe: {stripeEx.Message}");
                 }
 
                 _context.Companias.Remove(compania);

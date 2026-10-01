@@ -372,19 +372,19 @@ namespace CrownBuilders
 
         private static CrownBuilders.Components.Pages.CompaniasDisponibles.Compania MapearCompaniaDirectorio(
             CompaniaDirectorioCache compania) => new()
-        {
-            Id = compania.Id,
-            Nombre = compania.NombreEmpresa,
-            Ciudad = compania.Ciudad,
-            Especialidad = compania.Especialidad,
-            FormaPago = compania.FormaPago,
-            MontoPago = (double)compania.MontoPago,
-            TieneFotoPerfil = compania.TieneFotoPerfil,
-            TotalResenas = compania.TotalResenas,
-            Puntualidad = compania.Puntualidad,
-            Pagos = compania.Pagos,
-            Trato = compania.Trato
-        };
+            {
+                Id = compania.Id,
+                Nombre = compania.NombreEmpresa,
+                Ciudad = compania.Ciudad,
+                Especialidad = compania.Especialidad,
+                FormaPago = compania.FormaPago,
+                MontoPago = (double)compania.MontoPago,
+                TieneFotoPerfil = compania.TieneFotoPerfil,
+                TotalResenas = compania.TotalResenas,
+                Puntualidad = compania.Puntualidad,
+                Pagos = compania.Pagos,
+                Trato = compania.Trato
+            };
 
         public static async Task<PerfilCompania> ObtenerCompaniaPorIdAsync(int id)
         {
@@ -397,6 +397,26 @@ namespace CrownBuilders
             await InitAsync().ConfigureAwait(false);
             if (perfil != null && perfil.Id > 0)
             {
+                // 1. Intentar eliminar la cuenta en el servidor de Azure para cumplir con Google Play
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ELIMINAR CUENTA] Solicitando eliminación en Azure para ID: {perfil.Id}");
+                    using var response = await _httpClient.DeleteAsync($"Perfil/eliminar-compania/{perfil.Id}").ConfigureAwait(false);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        System.Diagnostics.Debug.WriteLine("[ELIMINAR CUENTA] Cuenta eliminada exitosamente en Azure.");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ELIMINAR CUENTA] El servidor respondió con estado: {response.StatusCode}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ELIMINAR CUENTA] Error de red al intentar borrar en Azure: {ex.Message}");
+                }
+
+                // 2. Eliminar el registro de la base de datos local SQLite
                 return await _db.DeleteAsync(perfil).ConfigureAwait(false);
             }
             return 0;
@@ -597,12 +617,12 @@ namespace CrownBuilders
 
                 var response = await _httpClient.GetAsync(apiUrl).ConfigureAwait(false);
                 System.Diagnostics.Debug.WriteLine($"[MENSAJES] Respuesta API: {response.StatusCode}");
-                
+
                 if (response.IsSuccessStatusCode)
                 {
                     var mensajesApi = await response.Content.ReadFromJsonAsync<List<MensajeApiResponse>>().ConfigureAwait(false);
                     System.Diagnostics.Debug.WriteLine($"[MENSAJES] Mensajes recibidos de API: {mensajesApi?.Count ?? 0}");
-                    
+
                     if (mensajesApi != null && mensajesApi.Count > 0)
                     {
                         // Sincronizar con la base de datos local

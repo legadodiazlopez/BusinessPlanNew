@@ -355,9 +355,30 @@
         bool confirmado = await JS.InvokeAsync<bool>("confirm", "¿ESTÁS SEGURO? Esta acción es irreversible y borrará tu perfil permanentemente.");
         if (confirmado)
         {
-            await DatabaseHelper.EliminarPerfilCompaniaAsync(perfil);
-            perfil = new PerfilCompania();
-            Navigation.NavigateTo("/");
+            try
+            {
+                await DatabaseHelper.EliminarPerfilCompaniaAsync(perfil);
+
+                try
+                {
+                    await MessagingService.StopAsync();
+                }
+                catch (Exception exception)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AUTH] No se pudo cerrar el chat durante la eliminación: {exception.Message}");
+                }
+
+                await ApiService.SetAuthTokenAsync(null);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ELIMINAR CUENTA] Error: {ex.Message}");
+            }
+            finally
+            {
+                perfil = new PerfilCompania();
+                Navigation.NavigateTo("/");
+            }
         }
     }
 

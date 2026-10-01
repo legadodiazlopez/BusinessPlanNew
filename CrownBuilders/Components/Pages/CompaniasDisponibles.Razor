@@ -272,13 +272,42 @@
 
     private async Task EliminarCuenta()
     {
-        bool confirmado = await JS.InvokeAsync<bool>("confirm", "¿Estás seguro de eliminar tu cuenta permanentemente?");
+        bool confirmado = await JS.InvokeAsync<bool>("confirm", "¿Estás seguro de eliminar tu cuenta permanentemente? Esta acción es irreversible.");
         if (confirmado)
         {
             try
             {
+                await ApiService.RestoreAuthTokenAsync();
+                var trabajadorIdActual = ApiService.AuthenticatedUserId ?? trabajador.Id;
+
+                if (trabajadorIdActual > 0)
+                {
+                    try
+                    {
+                        using var httpClient = new HttpClient { BaseAddress = new Uri(ApiEndpoints.ApiBaseUrl) };
+                        var response = await httpClient.DeleteAsync($"Perfil/trabajador/{trabajadorIdActual}");
+                        System.Diagnostics.Debug.WriteLine($"[ELIMINAR CUENTA] Estado Azure: {response.StatusCode}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ELIMINAR CUENTA] Error red Azure: {ex.Message}");
+                    }
+                }
+
                 await DatabaseHelper.PurgarTrabajadoresAsync();
                 trabajador = new CrownBuilders.Trabajador();
+
+                try
+                {
+                    await MessagingService.StopAsync();
+                }
+                catch (Exception exception)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AUTH] No se pudo cerrar el chat durante la eliminación: {exception.Message}");
+                }
+
+                await ApiService.SetAuthTokenAsync(null);
+
                 await JS.InvokeVoidAsync("alert", "Cuenta eliminada exitosamente.");
                 Navigation.NavigateTo("/", forceLoad: true);
             }
