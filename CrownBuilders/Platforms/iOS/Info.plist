@@ -4,6 +4,8 @@
 <dict>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>CFBundleIconName</key>
+    <string>crownbuilders</string>
     <key>UIDeviceFamily</key>
     <array>
         <integer>1</integer>
@@ -27,6 +29,6 @@
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>XSAppIconAssets</key>
-    <string>Assets.xcassets/appicon.appiconset</string>
+    <string>Assets.xcassets/crownbuilders.appiconset</string>
 </dict>
 </plist>
