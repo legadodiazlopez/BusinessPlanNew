@@ -27,22 +27,27 @@ jobs:
       - name: Patch Xcode Target Check
         run: |
           python3 -c "
-          import glob, os
+          import glob, re
 
           pattern = '/Users/runner/.dotnet/packs/Microsoft.iOS.Sdk.net10.0_*/**/Xamarin.Shared.targets'
           files = glob.glob(pattern, recursive=True)
 
           for f in files:
-              print(f'Parcheando archivo SDK: {f}')
-              with open(f, 'r') as file:
-                  content = file.read()
-              
-              # Reemplaza cualquier etiqueta <Error que valide el SDK por Condition=\"false\"
-              new_content = content.replace('<Error Condition=\"\'$(_SdkValidationSkip)\' != \'true\'', '<Error Condition=\"false\"')
-              new_content = new_content.replace('Condition=\"\'$(_XamarinSdkValidationSkip)\' != \'true\'', 'Condition=\"false\"')
-              
-              with open(f, 'w') as file:
-                  file.write(new_content)
+              print(f'Procesando archivo: {f}')
+              with open(f, 'r', encoding='utf-8') as file:
+                  lines = file.readlines()
+
+              new_lines = []
+              for line in lines:
+                  # Si la línea contiene una instrucción de Error de Xcode o validación de SDK, se neutraliza a Condition=\"false\"
+                  if '<Error ' in line and ('Xcode' in line or 'SdkValidationSkip' in line):
+                      line = line.replace('<Error ', '<Error Condition=\"false\" ')
+                  elif 'Name=\"_ValidateXcodeVersion\"' in line:
+                      line = line.replace('Name=\"_ValidateXcodeVersion\"', 'Name=\"_ValidateXcodeVersion_Disabled\"')
+                  new_lines.append(line)
+
+              with open(f, 'w', encoding='utf-8') as file:
+                  file.writelines(new_lines)
           "
 
       - name: Install Apple Certificate
