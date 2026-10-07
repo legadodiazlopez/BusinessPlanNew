@@ -21,17 +21,21 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Install MAUI Workload
-        run: dotnet workload install maui
-
-      - name: Bypass Xcode Version Check in Targets
+      - name: Configure Workload Pinning
         run: |
-          TARGETS_FILE=$(find ~/.dotnet/packs/Microsoft.iOS.Sdk.net10.0_* -name "Xamarin.Shared.targets" 2>/dev/null | head -n 1)
-          if [ -f "$TARGETS_FILE" ]; then
-            echo "Bypassing Xcode version check in: $TARGETS_FILE"
-            sudo sed -i '' 's/Requires Xcode/Skipped Xcode/g' "$TARGETS_FILE" || true
-            sudo sed -i '' 's/Error Text=/Comment Text=/g' "$TARGETS_FILE" || true
-          fi
+          cat << 'EOF' > global.json
+          {
+            "sdk": {
+              "version": "10.0.100",
+              "rollForward": "latestFeature",
+              "allowPrerelease": false
+            }
+          }
+          EOF
+
+      - name: Install MAUI Workload
+        run: |
+          dotnet workload install maui --include-pre-releases=false
 
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
