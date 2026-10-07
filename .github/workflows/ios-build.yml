@@ -53,7 +53,7 @@ jobs:
           DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
-            -f net10.0-ios \
+            /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
       - name: Build iOS App (Release)
