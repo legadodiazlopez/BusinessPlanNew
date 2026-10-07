@@ -2,37 +2,48 @@ name: Build iOS App
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ "master", "main", "fix/iphone-version3" ]
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-15
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '10.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          include-prerelease: true
 
-    - name: Install MAUI Workloads
-      run: dotnet workload install maui-ios
+      - name: Install MAUI Workload
+        run: dotnet workload install maui
 
-    - name: Install Apple Certificate
-      uses: apple-actions/import-codesign-certs@v3
-      with:
-        p12-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
-        p12-password: ${{ secrets.P12_PASSWORD }}
+      - name: Install Apple Certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
 
-    - name: Install Provisioning Profile
-      uses: apple-actions/download-provisioning-profile@v1
-      with:
-        bundle-id: '*'
-        profile-base64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+      - name: Install Provisioning Profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
-    - name: Build MAUI iOS App
-      run: |
-        dotnet publish CrownBuilders/CrownBuilders.csproj -f net10.0-ios -c Release -p:ArchiveOnBuild=true
+      - name: Restore Dependencies
+        run: dotnet restore CrownBuilders/CrownBuilders.csproj
+
+      - name: Build iOS App (Release)
+        run: |
+          dotnet build CrownBuilders/CrownBuilders.csproj \
+            -c Release \
+            -f net10.0-ios \
+            /p:ArchiveOnBuild=true \
+            /p:EnableAssemblyILStripping=false
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-release
+          path: CrownBuilders/bin/Release/net10.0-ios/ios-arm64/publish/*.ipa
