@@ -24,6 +24,11 @@ jobs:
       - name: Install MAUI Workload
         run: dotnet workload install maui
 
+      - name: Patch SDK Xcode Validation Error
+        run: |
+          echo "Buscando archivos Xamarin.Shared.targets..."
+          find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sudo sed -i '' '/requires Xcode/d' {} + || true
+
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
         with:
@@ -39,9 +44,7 @@ jobs:
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
-            /p:EnableWindowsTargeting=true \
-            /p:_XamarinSdkValidationSkip=true \
-            /p:_SkipVersionCheck=true
+            /p:EnableWindowsTargeting=true
 
       - name: Build iOS App (Release)
         run: |
@@ -50,9 +53,7 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:EnableAssemblyILStripping=false \
-            /p:_XamarinSdkValidationSkip=true \
-            /p:_SkipVersionCheck=true
+            /p:EnableAssemblyILStripping=false
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
