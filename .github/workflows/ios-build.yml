@@ -15,7 +15,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          include-prerelease: true
 
       - name: Install MAUI Workload
         run: dotnet workload install maui
@@ -23,7 +22,7 @@ jobs:
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
         with:
-          p12-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.P12_PASSWORD }}
 
       - name: Install Provisioning Profile
