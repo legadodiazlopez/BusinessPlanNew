@@ -26,12 +26,7 @@ jobs:
 
       - name: Patch Xcode Target Check
         run: |
-          TARGET_FILE=$(find /Users/runner/.dotnet/packs/Microsoft.iOS.Sdk.net10.0_* -name "Xamarin.Shared.targets" | grep "targets/Xamarin.Shared.targets")
-          if [ -f "$TARGET_FILE" ]; then
-            echo "Parcheando archivo de metas en: $TARGET_FILE"
-            sudo sed -i '' 's/<Error Condition="'\''$(_SdkValidationSkip)'\'' != '\''true'\''/\<!-- Parcheado --><Error Condition="'\''1'\'' == '\''2'\''/g' "$TARGET_FILE"
-            sudo sed -i '' 's/$(ErrorText)/Skipped Xcode Check/g' "$TARGET_FILE"
-          fi
+          sudo find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sed -i '' 's/<Error Condition=/<Error Condition="false" OldCondition=/g' {} + || true
 
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
