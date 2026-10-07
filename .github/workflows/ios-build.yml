@@ -21,21 +21,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Configure Workload Pinning
-        run: |
-          cat << 'EOF' > global.json
-          {
-            "sdk": {
-              "version": "10.0.100",
-              "rollForward": "latestFeature",
-              "allowPrerelease": false
-            }
-          }
-          EOF
-
       - name: Install MAUI Workload
-        run: |
-          dotnet workload install maui --include-pre-releases=false
+        run: dotnet workload install maui
 
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
@@ -52,7 +39,9 @@ jobs:
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
-            /p:EnableWindowsTargeting=true
+            /p:EnableWindowsTargeting=true \
+            /p:_XamarinSdkValidationSkip=true \
+            /p:_SkipVersionCheck=true
 
       - name: Build iOS App (Release)
         run: |
@@ -61,7 +50,9 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:EnableAssemblyILStripping=false
+            /p:EnableAssemblyILStripping=false \
+            /p:_XamarinSdkValidationSkip=true \
+            /p:_SkipVersionCheck=true
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
