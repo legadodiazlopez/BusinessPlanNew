@@ -14,12 +14,12 @@ jobs:
       - name: Select Xcode Version
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: 'latest-stable'
+          xcode-version: '16.2'
 
-      - name: Setup .NET
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '9.0.x'
 
       - name: Install MAUI Workload
         run: dotnet workload install maui
@@ -38,14 +38,14 @@ jobs:
       - name: Restore Dependencies
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
-            /p:TargetFramework=net10.0-ios \
+            /p:TargetFramework=net9.0-ios \
             /p:EnableWindowsTargeting=true
 
       - name: Build iOS App (Release)
         run: |
           dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
-            -f net10.0-ios \
+            -f net9.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
             /p:EnableAssemblyILStripping=false
@@ -54,4 +54,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-release
-          path: CrownBuilders/bin/Release/net10.0-ios/ios-arm64/publish/*.ipa
+          path: CrownBuilders/bin/Release/net9.0-ios/ios-arm64/publish/*.ipa
