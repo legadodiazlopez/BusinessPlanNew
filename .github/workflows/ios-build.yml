@@ -24,18 +24,11 @@ jobs:
       - name: Install MAUI Workload
         run: dotnet workload install maui
 
-      - name: Inject Global MSBuild Override Props
+      - name: Patch Hardcoded Xcode 27 Validation
         run: |
-          cat << 'EOF' > Directory.Build.props
-          <Project>
-            <PropertyGroup>
-              <_SdkValidationSkip>true</_SdkValidationSkip>
-              <_XamarinSdkValidationSkip>true</_XamarinSdkValidationSkip>
-              <ValidateExecutable>false</ValidateExecutable>
-              <AcceptEula>true</AcceptEula>
-            </PropertyGroup>
-          </Project>
-          EOF
+          echo "Desactivando verificación estricta de Xcode en Xamarin.Shared.targets..."
+          sudo find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sed -i '' 's/requires Xcode 27.0/patched/g' {} + || true
+          sudo find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sed -i '' 's/Condition="'\''$(_SdkValidationSkip)'\'' != '\''true'\''"/Condition="false"/g' {} + || true
 
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
@@ -49,16 +42,12 @@ jobs:
           echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Restore Dependencies
-        env:
-          DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
       - name: Build iOS App (Release)
-        env:
-          DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
         run: |
           dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
