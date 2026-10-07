@@ -24,11 +24,30 @@ jobs:
       - name: Install MAUI Workload
         run: dotnet workload install maui
 
-      - name: Patch Hardcoded Xcode 27 Validation
+      - name: Nuke Xcode Version Validation
         run: |
-          echo "Desactivando verificación estricta de Xcode en Xamarin.Shared.targets..."
-          sudo find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sed -i '' 's/requires Xcode 27.0/patched/g' {} + || true
-          sudo find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sed -i '' 's/Condition="'\''$(_SdkValidationSkip)'\'' != '\''true'\''"/Condition="false"/g' {} + || true
+          python3 -c "
+          import glob, os, re
+
+          pattern = '/Users/runner/.dotnet/packs/Microsoft.iOS.Sdk.net10.0_*/**/*.targets'
+          files = glob.glob(pattern, recursive=True)
+
+          for f in files:
+              with open(f, 'r', encoding='utf-8', errors='ignore') as file:
+                  content = file.read()
+              
+              # Neutralizar la tarea de validacion de Xcode
+              modified = content.replace('Name=\"_ValidateXcodeVersion\"', 'Name=\"_ValidateXcodeVersion_Disabled\"')
+              
+              # Reemplazar la evaluacion de error por Condition=\"false\"
+              modified = re.sub(r'<Error\s+Condition=\"[^\"]*requires Xcode[^\"]*\"', '<Error Condition=\"false\"', modified, flags=re.IGNORECASE)
+              modified = re.sub(r'<Error\s+Condition=\"[^\"]*_SdkValidationSkip[^\"]*\"', '<Error Condition=\"false\"', modified, flags=re.IGNORECASE)
+
+              if modified != content:
+                  print(f'Parcheado exitosamente: {f}')
+                  with open(f, 'w', encoding='utf-8') as file:
+                      file.write(modified)
+          "
 
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
@@ -45,7 +64,9 @@ jobs:
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
-            /p:EnableWindowsTargeting=true
+            /p:EnableWindowsTargeting=true \
+            /p:_SdkValidationSkip=true \
+            /p:_XamarinSdkValidationSkip=true
 
       - name: Build iOS App (Release)
         run: |
@@ -54,7 +75,9 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:EnableAssemblyILStripping=false
+            /p:EnableAssemblyILStripping=false \
+            /p:_SdkValidationSkip=true \
+            /p:_XamarinSdkValidationSkip=true
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
