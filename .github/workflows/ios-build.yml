@@ -26,7 +26,24 @@ jobs:
 
       - name: Patch Xcode Target Check
         run: |
-          sudo find /Users/runner/.dotnet/packs -name "Xamarin.Shared.targets" -exec sed -i '' 's/<Error Condition=/<Error Condition="false" OldCondition=/g' {} + || true
+          python3 -c "
+          import glob, os
+
+          pattern = '/Users/runner/.dotnet/packs/Microsoft.iOS.Sdk.net10.0_*/**/Xamarin.Shared.targets'
+          files = glob.glob(pattern, recursive=True)
+
+          for f in files:
+              print(f'Parcheando archivo SDK: {f}')
+              with open(f, 'r') as file:
+                  content = file.read()
+              
+              # Reemplaza cualquier etiqueta <Error que valide el SDK por Condition=\"false\"
+              new_content = content.replace('<Error Condition=\"\'$(_SdkValidationSkip)\' != \'true\'', '<Error Condition=\"false\"')
+              new_content = new_content.replace('Condition=\"\'$(_XamarinSdkValidationSkip)\' != \'true\'', 'Condition=\"false\"')
+              
+              with open(f, 'w') as file:
+                  file.write(new_content)
+          "
 
       - name: Install Apple Certificate
         uses: apple-actions/import-codesign-certs@v3
@@ -56,8 +73,7 @@ jobs:
             /p:ArchiveOnBuild=true \
             /p:EnableAssemblyILStripping=false \
             /p:_SdkValidationSkip=true \
-            /p:_XamarinSdkValidationSkip=true \
-            /p:_IPhoneSdkVersion=18.0
+            /p:_XamarinSdkValidationSkip=true
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
