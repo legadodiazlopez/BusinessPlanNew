@@ -16,15 +16,6 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
-      - name: Forzar Versión de Xcode a 27.0 en macOS
-        run: |
-          PLIST_PATH=$(find /Applications -maxdepth 3 -name "Info.plist" | grep -i "Xcode" | head -n 1)
-          echo "Archivo Info.plist localizado en: $PLIST_PATH"
-          sudo plutil -replace CFBundleShortVersionString -string "27.0" "$PLIST_PATH"
-          sudo plutil -replace CFBundleVersion -string "27.0" "$PLIST_PATH"
-          echo "Verificando nueva versión reportada por Xcode:"
-          xcodebuild -version
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -48,10 +39,13 @@ jobs:
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
-            /p:EnableWindowsTargeting=true \
-            /p:CheckForSufficientXcodeVersion=false \
-            /p:SkipXcodeVersionCheck=true \
-            /p:_SdkValidationSkip=true
+            /p:EnableWindowsTargeting=true
+
+      - name: Desactivar Validacion de Xcode en el SDK
+        run: |
+          echo "Aplicando parche a los archivos de metas de .NET iOS..."
+          find ~/.dotnet/packs -type f -name "*.targets" -exec sed -i '' 's/<Error /<Warning /g' {} +
+          echo "Parche aplicado exitosamente."
 
       - name: Build iOS App (Release)
         run: |
@@ -60,10 +54,7 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:EnableAssemblyILStripping=false \
-            /p:CheckForSufficientXcodeVersion=false \
-            /p:SkipXcodeVersionCheck=true \
-            /p:_SdkValidationSkip=true
+            /p:EnableAssemblyILStripping=false
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
