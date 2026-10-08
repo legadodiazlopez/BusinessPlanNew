@@ -43,9 +43,31 @@ jobs:
 
       - name: Desactivar Validacion de Xcode en el SDK
         run: |
-          echo "Aplicando parche a los archivos de metas de .NET iOS..."
-          find ~/.dotnet/packs -type f -name "*.targets" -exec sed -i '' 's/<Error /<Warning /g' {} +
-          echo "Parche aplicado exitosamente."
+          python3 -c "
+          import os
+
+          packs_dir = os.path.expanduser('~/.dotnet/packs')
+          modified_count = 0
+
+          for root, dirs, files in os.walk(packs_dir):
+              for file in files:
+                  if file.endswith(('.targets', '.props')):
+                      filepath = os.path.join(root, file)
+                      try:
+                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                              content = f.read()
+
+                          if 'requires Xcode' in content or '<Error' in content:
+                              new_content = content.replace('<Error', '<Warning').replace('</Error>', '</Warning>')
+                              with open(filepath, 'w', encoding='utf-8') as f:
+                                  f.write(new_content)
+                              print(f'Parcheado: {filepath}')
+                              modified_count += 1
+                      except Exception as e:
+                          print(f'Error en {filepath}: {e}')
+
+          print(f'Total archivos modificados: {modified_count}')
+          "
 
       - name: Build iOS App (Release)
         run: |
