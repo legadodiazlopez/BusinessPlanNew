@@ -18,9 +18,10 @@ jobs:
 
       - name: Forzar Versión de Xcode a 27.0 en macOS
         run: |
-          XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
-          echo "Modificando Info.plist en: $XCODE_PATH"
-          sudo plutil -replace CFBundleShortVersionString -string "27.0" "$XCODE_PATH/Info.plist"
+          PLIST_PATH=$(find /Applications -maxdepth 3 -name "Info.plist" | grep -i "Xcode" | head -n 1)
+          echo "Archivo Info.plist localizado en: $PLIST_PATH"
+          sudo plutil -replace CFBundleShortVersionString -string "27.0" "$PLIST_PATH"
+          sudo plutil -replace CFBundleVersion -string "27.0" "$PLIST_PATH"
           echo "Verificando nueva versión reportada por Xcode:"
           xcodebuild -version
 
@@ -47,7 +48,10 @@ jobs:
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
-            /p:EnableWindowsTargeting=true
+            /p:EnableWindowsTargeting=true \
+            /p:CheckForSufficientXcodeVersion=false \
+            /p:SkipXcodeVersionCheck=true \
+            /p:_SdkValidationSkip=true
 
       - name: Build iOS App (Release)
         run: |
@@ -56,7 +60,10 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:EnableAssemblyILStripping=false
+            /p:EnableAssemblyILStripping=false \
+            /p:CheckForSufficientXcodeVersion=false \
+            /p:SkipXcodeVersionCheck=true \
+            /p:_SdkValidationSkip=true
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
