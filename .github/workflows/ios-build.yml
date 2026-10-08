@@ -16,6 +16,14 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
+      - name: Forzar Versión de Xcode a 27.0 en macOS
+        run: |
+          XCODE_PATH=$(xcode-select -p | sed 's|/Contents/Developer||')
+          echo "Modificando Info.plist en: $XCODE_PATH"
+          sudo plutil -replace CFBundleShortVersionString -string "27.0" "$XCODE_PATH/Info.plist"
+          echo "Verificando nueva versión reportada por Xcode:"
+          xcodebuild -version
+
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -40,23 +48,6 @@ jobs:
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
-
-      - name: Desactivar Bloqueo de Xcode en el SDK
-        run: |
-          python3 -c "
-          import glob, os
-          pattern = os.path.expanduser('~/.dotnet/packs/Microsoft.iOS.Sdk*/**/Xamarin.Shared.targets')
-          files = glob.glob(pattern, recursive=True)
-          print(f'Archivos de SDK encontrados: {len(files)}')
-          for path in files:
-              print(f'Modificando: {path}')
-              with open(path, 'r', encoding='utf-8') as f:
-                  code = f.read()
-              # Convierte el error fatal de Xcode en una simple advertencia
-              code = code.replace('<Error ', '<Warning ')
-              with open(path, 'w', encoding='utf-8') as f:
-                  f.write(code)
-          "
 
       - name: Build iOS App (Release)
         run: |
