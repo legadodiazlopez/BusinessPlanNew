@@ -47,8 +47,6 @@ jobs:
           import os
 
           packs_dir = os.path.expanduser('~/.dotnet/packs')
-          modified_count = 0
-
           for root, dirs, files in os.walk(packs_dir):
               for file in files:
                   if file.endswith(('.targets', '.props')):
@@ -57,21 +55,19 @@ jobs:
                           with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                               content = f.read()
 
-                          if 'requires Xcode' in content or '<Error' in content:
+                          if 'requires Xcode' in content:
                               new_content = content.replace('<Error', '<Warning').replace('</Error>', '</Warning>')
                               with open(filepath, 'w', encoding='utf-8') as f:
                                   f.write(new_content)
-                              print(f'Parcheado: {filepath}')
-                              modified_count += 1
+                              print(f'Patched: {filepath}')
                       except Exception as e:
-                          print(f'Error en {filepath}: {e}')
-
-          print(f'Total archivos modificados: {modified_count}')
+                          print(f'Error: {e}')
           "
 
       - name: Build iOS App (Release)
         run: |
           dotnet build CrownBuilders/CrownBuilders.csproj \
+            --no-restore \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
