@@ -95,9 +95,9 @@ jobs:
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
-      - name: Publish iOS App (Release IPA)
+      - name: Build iOS App (Release IPA)
         run: |
-          dotnet publish CrownBuilders/CrownBuilders.csproj \
+          dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
