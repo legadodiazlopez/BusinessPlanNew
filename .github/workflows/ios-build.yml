@@ -16,6 +16,26 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
+      - name: Interceptar Version de Xcode
+        run: |
+          mkdir -p /tmp/xcode_wrapper
+          cat << 'EOF' > /tmp/xcode_wrapper/xcodebuild
+          #!/bin/bash
+          if [[ "$*" == *"-version"* ]]; then
+            echo "Xcode 27.0"
+            echo "Build version 27A522"
+          else
+            REAL_BIN="/usr/bin/xcodebuild"
+            if [ -f "$REAL_BIN" ]; then
+              exec "$REAL_BIN" "$@"
+            else
+              exec /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild "$@"
+            fi
+          fi
+          EOF
+          chmod +x /tmp/xcode_wrapper/xcodebuild
+          echo "/tmp/xcode_wrapper" >> $GITHUB_PATH
+
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
@@ -43,35 +63,39 @@ jobs:
 
       - name: Desactivar Validacion de Xcode en el SDK
         run: |
-          echo "Buscando y modificando archivos de metas (incluyendo enlaces simbolicos)..."
           chmod -R 777 ~/.dotnet/packs || true
-
           python3 -c "
           import os
 
           packs_dir = os.path.expanduser('~/.dotnet/packs')
-          patched_count = 0
-
-          # followlinks=True permite ingresar a las carpetas con enlaces simbolicos
           for root, dirs, files in os.walk(packs_dir, followlinks=True):
               for file in files:
                   if file.endswith(('.targets', '.props')):
                       filepath = os.path.join(root, file)
                       try:
-                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                              content = f.read()
+                          with open(filepath, 'rb') as f:
+                              data = f.read()
 
-                          if '<Error' in content:
-                              new_content = content.replace('<Error', '<Warning').replace('</Error>', '</Warning>')
+                          u8_err, u8_warn = b'<Error', b'<Warning'
+                          u8_err_close, u8_warn_close = b'</Error>', b'</Warning>'
+                          u16_err, u16_warn = '<Error'.encode('utf-16-le'), '<Warning'.encode('utf-16-le')
+                          u16_err_close, u16_warn_close = '</Error>'.encode('utf-16-le'), '</Warning>'.encode('utf-16-le')
+
+                          modified = False
+                          if u8_err in data:
+                              data = data.replace(u8_err, u8_warn).replace(u8_err_close, u8_warn_close)
+                              modified = True
+                          if u16_err in data:
+                              data = data.replace(u16_err, u16_warn).replace(u16_err_close, u16_warn_close)
+                              modified = True
+
+                          if modified:
                               os.chmod(filepath, 0o777)
-                              with open(filepath, 'w', encoding='utf-8') as f:
-                                  f.write(new_content)
-                              print(f'PARCHEADO: {filepath}')
-                              patched_count += 1
+                              with open(filepath, 'wb') as f:
+                                  f.write(data)
+                              print(f'PARCHEADO: {os.path.basename(filepath)}')
                       except Exception as e:
                           print(f'Error en {filepath}: {e}')
-
-          print(f'Total de archivos modificados: {patched_count}')
           "
 
       - name: Build iOS App (Release)
