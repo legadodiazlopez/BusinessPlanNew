@@ -1,7 +1,10 @@
 <Project>
   <PropertyGroup>
-    <!-- Desactiva las validaciones estrictas de Xcode que rompen la compilación en GitHub Actions -->
     <CheckForSufficientXcodeVersion>false</CheckForSufficientXcodeVersion>
     <SkipXcodeVersionCheck>true</SkipXcodeVersionCheck>
+    <ValidateXcodeVersion>false</ValidateXcodeVersion>
+    <_SdkValidationSkip>true</_SdkValidationSkip>
+    <_XcodeVersion>27.0</_XcodeVersion>
+    <SelectedXcodeVersion>27.0</SelectedXcodeVersion>
   </PropertyGroup>
 </Project>
