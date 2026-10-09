@@ -39,39 +39,37 @@ jobs:
         run: |
           dotnet restore CrownBuilders/CrownBuilders.csproj \
             /p:TargetFramework=net10.0-ios \
-            /p:EnableWindowsTargeting=true \
-            /p:CheckForSufficientXcodeVersion=false \
-            /p:SkipXcodeVersionCheck=true \
-            /p:_SdkValidationSkip=true
+            /p:EnableWindowsTargeting=true
 
       - name: Desactivar Validacion de Xcode en el SDK
         run: |
-          echo "Desbloqueando permisos en el directorio de paquetes..."
-          chmod -R 777 ~/.dotnet/packs
+          echo "Buscando y modificando archivos de metas (incluyendo enlaces simbolicos)..."
+          chmod -R 777 ~/.dotnet/packs || true
 
           python3 -c "
-          import os, glob
+          import os
 
           packs_dir = os.path.expanduser('~/.dotnet/packs')
-          pattern = os.path.join(packs_dir, '**', '*.targets')
-          target_files = glob.glob(pattern, recursive=True)
-          target_files.extend(glob.glob(os.path.join(packs_dir, '**', '*.props'), recursive=True))
-
           patched_count = 0
-          for filepath in target_files:
-              try:
-                  with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
-                      content = f.read()
 
-                  if '<Error' in content:
-                      new_content = content.replace('<Error', '<Warning').replace('</Error>', '</Warning>')
-                      os.chmod(filepath, 0o777)
-                      with open(filepath, 'w', encoding='utf-8') as f:
-                          f.write(new_content)
-                      print(f'¡Parcheado con exito!: {os.path.basename(filepath)}')
-                      patched_count += 1
-              except Exception as e:
-                  print(f'Error en {filepath}: {e}')
+          # followlinks=True permite ingresar a las carpetas con enlaces simbolicos
+          for root, dirs, files in os.walk(packs_dir, followlinks=True):
+              for file in files:
+                  if file.endswith(('.targets', '.props')):
+                      filepath = os.path.join(root, file)
+                      try:
+                          with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                              content = f.read()
+
+                          if '<Error' in content:
+                              new_content = content.replace('<Error', '<Warning').replace('</Error>', '</Warning>')
+                              os.chmod(filepath, 0o777)
+                              with open(filepath, 'w', encoding='utf-8') as f:
+                                  f.write(new_content)
+                              print(f'PARCHEADO: {filepath}')
+                              patched_count += 1
+                      except Exception as e:
+                          print(f'Error en {filepath}: {e}')
 
           print(f'Total de archivos modificados: {patched_count}')
           "
@@ -84,10 +82,7 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:EnableAssemblyILStripping=false \
-            /p:CheckForSufficientXcodeVersion=false \
-            /p:SkipXcodeVersionCheck=true \
-            /p:_SdkValidationSkip=true
+            /p:EnableAssemblyILStripping=false
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
