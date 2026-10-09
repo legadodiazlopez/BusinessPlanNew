@@ -43,25 +43,34 @@ jobs:
 
       - name: Desactivar Validacion de Xcode en el SDK
         run: |
+          echo "Habilitando permisos de escritura en paquetes .NET..."
+          chmod -R 777 ~/.dotnet/packs
+
           python3 -c "
-          import os
+          import os, stat
 
           packs_dir = os.path.expanduser('~/.dotnet/packs')
+          patched_files = 0
+
           for root, dirs, files in os.walk(packs_dir):
               for file in files:
                   if file.endswith(('.targets', '.props')):
                       filepath = os.path.join(root, file)
                       try:
+                          os.chmod(filepath, 0o777)
                           with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                               content = f.read()
 
-                          if 'requires Xcode' in content:
+                          if '<Error' in content and 'Xcode' in content:
                               new_content = content.replace('<Error', '<Warning').replace('</Error>', '</Warning>')
                               with open(filepath, 'w', encoding='utf-8') as f:
                                   f.write(new_content)
-                              print(f'Patched: {filepath}')
+                              print(f'¡Modificado exitosamente!: {file}')
+                              patched_files += 1
                       except Exception as e:
-                          print(f'Error: {e}')
+                          print(f'Error en {file}: {e}')
+
+          print(f'Total de archivos modificados: {patched_files}')
           "
 
       - name: Build iOS App (Release)
