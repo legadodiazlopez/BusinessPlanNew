@@ -95,18 +95,34 @@ jobs:
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
-      - name: Build iOS App (Release IPA)
+      - name: Build iOS App (Release)
         run: |
+          mkdir -p output
           dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
             /p:BuildIpa=true \
+            /p:IpaPackageDir="$(pwd)/output" \
             /p:EnableAssemblyILStripping=false
+
+      - name: Garantizar Empaquetado IPA
+        run: |
+          if [ -z "$(ls -A output/*.ipa 2>/dev/null)" ]; then
+            echo "Buscando .app compilado..."
+            APP_PATH=$(find CrownBuilders/bin -name "*.app" -type d | head -n 1)
+            if [ -n "$APP_PATH" ]; then
+              echo "Empaquetando desde: $APP_PATH"
+              mkdir -p Payload
+              cp -r "$APP_PATH" Payload/
+              zip -r output/CrownBuilders.ipa Payload
+              rm -rf Payload
+            fi
+          fi
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-release
-          path: CrownBuilders/bin/Release/net10.0-ios/**/*.ipa
+          path: output/*.ipa
