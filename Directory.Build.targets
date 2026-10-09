@@ -1,0 +1,6 @@
+<Project>
+  <Target Name="_ValidateXcodeVersion" />
+  <Target Name="_CheckXcodeVersion" />
+  <Target Name="_ValidateAppExtensionXcodeVersion" />
+  <Target Name="_ValidateSdkVersions" />
+</Project>
