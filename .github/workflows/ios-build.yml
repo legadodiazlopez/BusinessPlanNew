@@ -108,6 +108,26 @@ jobs:
             /p:EnableAssemblyILStripping=false \
             /p:CodesignProvision="Perfil de CrownBuilders en la App Store"
 
+      - name: Localizar y Asegurar IPA
+        run: |
+          mkdir -p output
+          # Si el ipa se generó en otra subcarpeta, lo buscamos y lo movemos a output/
+          IPA_FILE=$(find CrownBuilders/bin -name "*.ipa" | head -n 1)
+          if [ -n "$IPA_FILE" ]; then
+            echo "Copiando IPA encontrado desde $IPA_FILE hacia output/CrownBuilders.ipa"
+            cp "$IPA_FILE" output/CrownBuilders.ipa
+          else
+            echo "Buscando paquete .app firmado para comprimirlo..."
+            APP_FILE=$(find CrownBuilders/bin -name "*.app" -type d | head -n 1)
+            if [ -n "$APP_FILE" ]; then
+              mkdir -p Payload
+              cp -r "$APP_FILE" Payload/
+              cd Payload && zip -r ../output/CrownBuilders.ipa * && cd ..
+              rm -rf Payload
+            fi
+          fi
+          ls -la output/
+
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
