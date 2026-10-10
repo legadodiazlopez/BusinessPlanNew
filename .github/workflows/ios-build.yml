@@ -103,15 +103,13 @@ jobs:
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
-      - name: Build iOS App (Release)
+      - name: Publish iOS App (Release)
         run: |
-          dotnet build CrownBuilders/CrownBuilders.csproj \
+          dotnet publish CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:BuildIpa=true \
-            /p:EnableAssemblyILStripping=false \
             /p:CodesignProvision="${{ env.PROVISIONING_UUID }}"
 
       - name: Localizar y Copiar IPA a Output
@@ -120,13 +118,12 @@ jobs:
           echo "Buscando archivos IPA generados..."
           find . -name "*.ipa"
           
-          # Copiar el IPA encontrado directamente a la carpeta output con el nombre requerido
           IPA_ORIGIN=$(find . -name "*.ipa" | head -n 1)
           if [ -n "$IPA_ORIGIN" ]; then
             cp "$IPA_ORIGIN" output/CrownBuilders.ipa
             echo "IPA copiado exitosamente a output/CrownBuilders.ipa"
           else
-            echo "Error: No se encontró ningún archivo .ipa"
+            echo "Error: No se encontró ningún archivo .ipa tras el publish"
             exit 1
           fi
           ls -la output/
