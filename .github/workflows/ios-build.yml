@@ -33,7 +33,12 @@ jobs:
       - name: Install Provisioning Profile
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+          PROFILE_PATH=~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PROFILE_PATH"
+          # Extraer el UUID del perfil para asignarlo correctamente en la compilación
+          UUID=$(grep -a -A 1 '<key>UUID</key>' "$PROFILE_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          echo "PROVISIONING_UUID=$UUID" >> $GITHUB_ENV
+          echo "Perfil instalado con UUID: $UUID"
 
       - name: Corregir e Imprimir Info.plist
         run: |
@@ -77,7 +82,7 @@ jobs:
               <key>NSCameraUsageDescription</key>
               <string>Crown Builders requiere acceso a la cámara para tomar fotos de perfil y adjuntar avances de obra.</string>
               <key>NSPhotoLibraryUsageDescription</key>
-              <string>Crown Builders requiere acceso a la galería para seleccionar la foto de perfil.</string>
+              <string>Crown Builders requiere acceso al carrete para adjuntar fotos.</string>
           </dict>
           </plist>'''
 
@@ -106,41 +111,12 @@ jobs:
             /p:BuildIpa=true \
             /p:IpaPackageDir="$(pwd)/output" \
             /p:EnableAssemblyILStripping=false \
-            /p:CodesignProvision="Perfil de CrownBuilders en la App Store"
-
-      - name: Inyectar Provisioning Profile en el IPA
-        run: |
-          mkdir -p output
-          PROFILE_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" | head -n 1)
-          IPA_FILE=$(find CrownBuilders/bin -name "*.ipa" | head -n 1)
-          
-          if [ -n "$IPA_FILE" ] && [ -n "$PROFILE_PATH" ]; then
-            echo "Descomprimiendo IPA para inyectar el perfil..."
-            unzip -q "$IPA_FILE" -d extracted_payload
-            
-            APP_DIR=$(find extracted_payload/Payload -name "*.app" -type d | head -n 1)
-            if [ -n "$APP_DIR" ]; then
-              echo "Copiando perfil como embedded.mobileprovision..."
-              cp "$PROFILE_PATH" "$APP_DIR/embedded.mobileprovision"
-            fi
-            
-            echo "Reempaquetando IPA..."
-            cd extracted_payload
-            zip -qr ../output/CrownBuilders.ipa *
-            cd ..
-            rm -rf extracted_payload
-          else
-            echo "Buscando .app directamente..."
-            APP_FILE=$(find CrownBuilders/bin -name "*.app" -type d | head -n 1)
-            if [ -n "$APP_FILE" ] && [ -n "$PROFILE_PATH" ]; then
-              cp "$PROFILE_PATH" "$APP_FILE/embedded.mobileprovision"
-              mkdir -p Payload
-              cp -r "$APP_FILE" Payload/
-              zip -qr output/CrownBuilders.ipa Payload
-              rm -rf Payload
-            fi
-          fi
-          ls -la output/
+            /p:Configuration=Release \
+            /p:Platform=iPhone \
+            /p:RuntimeIdentifier=ios-arm64 \
+            /p:CodesignKey="Apple Distribution" \
+            /p:CodesignProvision="Perfil de CrownBuilders en la App Store" \
+            /p:PackageCertificateKeyFile=""
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
