@@ -108,21 +108,35 @@ jobs:
             /p:EnableAssemblyILStripping=false \
             /p:CodesignProvision="Perfil de CrownBuilders en la App Store"
 
-      - name: Localizar y Asegurar IPA
+      - name: Inyectar Provisioning Profile en el IPA
         run: |
           mkdir -p output
-          # Si el ipa se generó en otra subcarpeta, lo buscamos y lo movemos a output/
+          PROFILE_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" | head -n 1)
           IPA_FILE=$(find CrownBuilders/bin -name "*.ipa" | head -n 1)
-          if [ -n "$IPA_FILE" ]; then
-            echo "Copiando IPA encontrado desde $IPA_FILE hacia output/CrownBuilders.ipa"
-            cp "$IPA_FILE" output/CrownBuilders.ipa
+          
+          if [ -n "$IPA_FILE" ] && [ -n "$PROFILE_PATH" ]; then
+            echo "Descomprimiendo IPA para inyectar el perfil..."
+            unzip -q "$IPA_FILE" -d extracted_payload
+            
+            APP_DIR=$(find extracted_payload/Payload -name "*.app" -type d | head -n 1)
+            if [ -n "$APP_DIR" ]; then
+              echo "Copiando perfil como embedded.mobileprovision..."
+              cp "$PROFILE_PATH" "$APP_DIR/embedded.mobileprovision"
+            fi
+            
+            echo "Reempaquetando IPA..."
+            cd extracted_payload
+            zip -qr ../output/CrownBuilders.ipa *
+            cd ..
+            rm -rf extracted_payload
           else
-            echo "Buscando paquete .app firmado para comprimirlo..."
+            echo "Buscando .app directamente..."
             APP_FILE=$(find CrownBuilders/bin -name "*.app" -type d | head -n 1)
-            if [ -n "$APP_FILE" ]; then
+            if [ -n "$APP_FILE" ] && [ -n "$PROFILE_PATH" ]; then
+              cp "$PROFILE_PATH" "$APP_FILE/embedded.mobileprovision"
               mkdir -p Payload
               cp -r "$APP_FILE" Payload/
-              cd Payload && zip -r ../output/CrownBuilders.ipa * && cd ..
+              zip -qr output/CrownBuilders.ipa Payload
               rm -rf Payload
             fi
           fi
