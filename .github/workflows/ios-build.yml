@@ -33,12 +33,16 @@ jobs:
       - name: Install Provisioning Profile
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          PROFILE_PATH=~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
-          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PROFILE_PATH"
-          # Extraer el UUID del perfil para asignarlo correctamente en la compilación
-          UUID=$(grep -a -A 1 '<key>UUID</key>' "$PROFILE_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH"
+          
+          # Extraer el UUID real del perfil para que Xcode lo reconozca sin fallas
+          UUID=$(grep -a -A 1 '<key>UUID</key>' "$PP_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          echo "UUID del perfil: $UUID"
+          
+          # Guardar el perfil usando su UUID como nombre de archivo en la ruta de Xcode
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
           echo "PROVISIONING_UUID=$UUID" >> $GITHUB_ENV
-          echo "Perfil instalado con UUID: $UUID"
 
       - name: Corregir e Imprimir Info.plist
         run: |
@@ -82,7 +86,7 @@ jobs:
               <key>NSCameraUsageDescription</key>
               <string>Crown Builders requiere acceso a la cámara para tomar fotos de perfil y adjuntar avances de obra.</string>
               <key>NSPhotoLibraryUsageDescription</key>
-              <string>Crown Builders requiere acceso al carrete para adjuntar fotos.</string>
+              <string>Crown Builders requiere acceso a la galería para seleccionar la foto de perfil.</string>
           </dict>
           </plist>'''
 
@@ -111,12 +115,30 @@ jobs:
             /p:BuildIpa=true \
             /p:IpaPackageDir="$(pwd)/output" \
             /p:EnableAssemblyILStripping=false \
-            /p:Configuration=Release \
-            /p:Platform=iPhone \
-            /p:RuntimeIdentifier=ios-arm64 \
-            /p:CodesignKey="Apple Distribution" \
-            /p:CodesignProvision="Perfil de CrownBuilders en la App Store" \
-            /p:PackageCertificateKeyFile=""
+            /p:CodesignProvision="${{ env.PROVISIONING_UUID }}"
+
+      - name: Asegurar Perfil en el IPA Compilado
+        run: |
+          mkdir -p output
+          PROFILE_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" | head -n 1)
+          IPA_FILE=$(find output -name "*.ipa" | head -n 1)
+          
+          if [ -n "$IPA_FILE" ] && [ -n "$PROFILE_PATH" ]; then
+            echo "Inyectando perfil en el IPA generado..."
+            mkdir -p temp_ipa
+            unzip -q "$IPA_FILE" -d temp_ipa
+            
+            APP_DIR=$(find temp_ipa/Payload -name "*.app" -type d | head -n 1)
+            if [ -n "$APP_DIR" ]; then
+              cp "$PROFILE_PATH" "$APP_DIR/embedded.mobileprovision"
+            fi
+            
+            cd temp_ipa
+            rm -f ../output/*.ipa
+            zip -qr ../output/CrownBuilders.ipa *
+            cd ..
+            rm -rf temp_ipa
+          fi
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
