@@ -1,4 +1,4 @@
-Name: Build and Upload iOS App to TestFlight
+name: Build and Upload iOS App to TestFlight
 
 on:
   workflow_dispatch:
