@@ -112,7 +112,12 @@ jobs:
           if [ -z "$(ls -A output/*.ipa 2>/dev/null)" ]; then
             echo "Buscando .app compilado..."
             APP_PATH=$(find CrownBuilders/bin -name "*.app" -type d | head -n 1)
+            PROFILE_PATH=$(find ~/Library/MobileDevice/Provisioning\ Profiles -name "*.mobileprovision" | head -n 1)
+            
             if [ -n "$APP_PATH" ]; then
+              echo "Copiando perfil de provisión en el paquete .app..."
+              cp "$PROFILE_PATH" "$APP_PATH/embedded.mobileprovision"
+              
               echo "Empaquetando desde: $APP_PATH"
               mkdir -p Payload
               cp -r "$APP_PATH" Payload/
