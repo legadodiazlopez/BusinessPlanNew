@@ -4,7 +4,10 @@
     <SkipXcodeVersionCheck>true</SkipXcodeVersionCheck>
     <ValidateXcodeVersion>false</ValidateXcodeVersion>
     <_SdkValidationSkip>true</_SdkValidationSkip>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <PublishTrimmed>true</PublishTrimmed>
     <MtouchLink>None</MtouchLink>
-    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 </Project>
