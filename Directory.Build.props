@@ -1,10 +1,13 @@
 <Project>
   <PropertyGroup>
-    <CheckForSufficientXcodeVersion>false</CheckForSufficientXcodeVersion>
+    <CheckXcodeVersion>false</CheckXcodeVersion>
     <SkipXcodeVersionCheck>true</SkipXcodeVersionCheck>
     <ValidateXcodeVersion>false</ValidateXcodeVersion>
     <_SdkValidationSkip>true</_SdkValidationSkip>
-    <_XcodeVersion>27.0</_XcodeVersion>
-    <SelectedXcodeVersion>27.0</SelectedXcodeVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <MtouchLink>SdkOnly</MtouchLink>
+    <PublishTrimmed>true</PublishTrimmed>
   </PropertyGroup>
 </Project>
