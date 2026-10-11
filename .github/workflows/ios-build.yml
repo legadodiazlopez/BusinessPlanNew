@@ -24,11 +24,19 @@ jobs:
       - name: Install MAUI Workload
         run: dotnet workload install maui
 
-      - name: Install Apple Certificate
+      - name: Install Apple Certificate and Unlock Keychain
         uses: apple-actions/import-codesign-certs@v3
         with:
           p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           p12-password: ${{ secrets.P12_PASSWORD }}
+
+      - name: Configurar Permisos del Llavero para Codesign
+        run: |
+          # Desbloquear el llavero del sistema para permitir firmas automáticas en segundo plano
+          security list-keychains -d user -s login.keychain
+          security unlock-keychain -p "" login.keychain
+          # Listar identidades disponibles para verificar que el certificado sea reconocido
+          security find-identity -v -p codesigning
 
       - name: Install Provisioning Profile
         run: |
@@ -36,7 +44,7 @@ jobs:
           PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
           echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH"
           
-          # Extraer el UUID real del perfil para que Xcode lo reconozca
+          # Extraer el UUID real del perfil
           UUID=$(grep -a -A 1 '<key>UUID</key>' "$PP_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
           echo "UUID del perfil: $UUID"
           
@@ -110,14 +118,12 @@ jobs:
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
+            /p:CodesignKey="Apple Distribution" \
             /p:CodesignProvision="${{ env.PROVISIONING_UUID }}"
 
       - name: Localizar y Copiar IPA a Output
         run: |
           mkdir -p output
-          echo "Buscando archivos IPA generados..."
-          find . -name "*.ipa"
-          
           IPA_ORIGIN=$(find . -name "*.ipa" | head -n 1)
           if [ -n "$IPA_ORIGIN" ]; then
             cp "$IPA_ORIGIN" output/CrownBuilders.ipa
