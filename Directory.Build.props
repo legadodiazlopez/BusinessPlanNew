@@ -4,5 +4,7 @@
     <SkipXcodeVersionCheck>true</SkipXcodeVersionCheck>
     <ValidateXcodeVersion>false</ValidateXcodeVersion>
     <_SdkValidationSkip>true</_SdkValidationSkip>
+    <WarningsNotAsErrors>MT4162</WarningsNotAsErrors>
+    <NoWarn>$(NoWarn);MT4162</NoWarn>
   </PropertyGroup>
 </Project>
