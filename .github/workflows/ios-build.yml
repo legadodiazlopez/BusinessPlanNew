@@ -117,7 +117,6 @@ jobs:
           echo "Buscando archivos .ipa generados en el espacio de trabajo..."
           find . -name "*.ipa"
           
-          # Copiar el primer .ipa que encuentre sin importar la subcarpeta
           IPA_FILE=$(find . -name "*.ipa" | head -n 1)
           if [ -n "$IPA_FILE" ]; then
             cp "$IPA_FILE" output/CrownBuilders.ipa
