@@ -36,7 +36,6 @@ jobs:
           PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
           echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH"
           
-          # Extraer el UUID real del perfil
           UUID=$(grep -a -A 1 '<key>UUID</key>' "$PP_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
           echo "UUID del perfil: $UUID"
           
@@ -81,7 +80,6 @@ jobs:
               <key>XSAppIconAssets</key>
               <string>Assets.xcassets/crownbuilders.appiconset</string>
 
-              <!-- Permisos requeridos para evitar el crash al tomar/seleccionar foto -->
               <key>NSCameraUsageDescription</key>
               <string>Crown Builders requiere acceso a la cámara para tomar fotos de perfil y adjuntar avances de obra.</string>
               <key>NSPhotoLibraryUsageDescription</key>
@@ -105,26 +103,26 @@ jobs:
 
       - name: Publish iOS App (Release)
         run: |
-          XCODE_PATH=$(xcode-select -p)
-          echo "Usando ruta de Xcode: $XCODE_PATH"
           dotnet publish CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
             /p:CodesignKey="Apple Distribution" \
-            /p:CodesignProvision="${{ env.PROVISIONING_UUID }}" \
-            /p:XCodePath="$XCODE_PATH"
+            /p:CodesignProvision="${{ env.PROVISIONING_UUID }}"
 
-      - name: Localizar y Copiar IPA a Output
+      - name: Localizar y Copiar IPA Infalible
         run: |
           mkdir -p output
+          echo "Buscando archivos .ipa generados en todo el workspace..."
+          find . -name "*.ipa" -print
+          
           IPA_ORIGIN=$(find . -name "*.ipa" | head -n 1)
           if [ -n "$IPA_ORIGIN" ]; then
             cp "$IPA_ORIGIN" output/CrownBuilders.ipa
-            echo "IPA copiado exitosamente a output/CrownBuilders.ipa"
+            echo "¡Éxito! IPA encontrado y copiado desde: $IPA_ORIGIN"
           else
-            echo "Error: No se encontró ningún archivo .ipa tras el publish"
+            echo "Error crítico: No se encontró ningún archivo .ipa en el disco."
             exit 1
           fi
           ls -la output/
