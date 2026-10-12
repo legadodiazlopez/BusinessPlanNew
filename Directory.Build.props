@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
-    <PublishTrimmed>true</PublishTrimmed>
+    <TargetPlatformVersion>18.0</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
     <MtouchLink>SdkOnly</MtouchLink>
-    <MtouchNoSymbolStrip>true</MtouchNoSymbolStrip>
-    <NoWarn>$(NoWarn);MT4162</NoWarn>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 </Project>
