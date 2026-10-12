@@ -5,4 +5,11 @@
     <ValidateXcodeVersion>false</ValidateXcodeVersion>
     <_SdkValidationSkip>true</_SdkValidationSkip>
   </PropertyGroup>
+
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <MtouchLink>SdkOnly</MtouchLink>
+    <WarningsNotAsErrors>MT4162</WarningsNotAsErrors>
+    <NoWarn>$(NoWarn);MT4162;IL7080;WT2431</NoWarn>
+  </PropertyGroup>
 </Project>
