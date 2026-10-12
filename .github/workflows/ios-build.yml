@@ -114,9 +114,6 @@ jobs:
       - name: Localizar y Copiar IPA Infalible
         run: |
           mkdir -p output
-          echo "Buscando archivos .ipa generados en todo el workspace..."
-          find . -name "*.ipa" -print
-          
           IPA_ORIGIN=$(find . -name "*.ipa" | head -n 1)
           if [ -n "$IPA_ORIGIN" ]; then
             cp "$IPA_ORIGIN" output/CrownBuilders.ipa
