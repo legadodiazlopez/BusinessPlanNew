@@ -1,4 +1,4 @@
-name: Build iOS App
+Name: Build iOS App
 
 on:
   workflow_dispatch:
@@ -99,4 +99,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-release
-          path: CrownBuilders/bin/Release/net10.0-ios/**/*.ipa
+          path: '**/*.ipa'
