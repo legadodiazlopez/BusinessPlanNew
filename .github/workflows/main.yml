@@ -1,4 +1,4 @@
-name: Build iOS App
+Name: Build iOS App
 
 on:
   workflow_dispatch:
@@ -88,11 +88,10 @@ jobs:
 
       - name: Build iOS App (Release)
         run: |
-          dotnet publish CrownBuilders/CrownBuilders.csproj \
+          dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
-            /p:BuildIpa=true \
             /p:ArchiveOnBuild=true \
             /p:EnableAssemblyILStripping=false
 
