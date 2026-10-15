@@ -1,10 +1,10 @@
-name: Build and Upload iOS App to TestFlight
+name: Build iOS App
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-and-upload-ios:
+  build-ios:
     runs-on: macos-15
 
     steps:
@@ -33,23 +33,14 @@ jobs:
       - name: Install Provisioning Profile
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
-          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH"
-          
-          UUID=$(grep -a -A 1 '<key>UUID</key>' "$PP_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
-          echo "UUID del perfil: $UUID"
-          
-          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
-          echo "PROVISIONING_UUID=$UUID" >> $GITHUB_ENV
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
-      - name: Corregir e Imprimir Info.plist
+      - name: Regenerar Info.plist Limpio con Permisos de Apple
         run: |
-          python3 -c "
-          import os
-
-          content = '''<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
-          <plist version=\"1.0\">
+          cat << 'EOF' > CrownBuilders/Platforms/iOS/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
           <dict>
               <key>LSRequiresIPhoneOS</key>
               <true/>
@@ -80,20 +71,14 @@ jobs:
               <key>XSAppIconAssets</key>
               <string>Assets.xcassets/crownbuilders.appiconset</string>
 
+              <!-- Permisos requeridos para evitar el crash al tomar/seleccionar foto -->
               <key>NSCameraUsageDescription</key>
               <string>Crown Builders requiere acceso a la cámara para tomar fotos de perfil y adjuntar avances de obra.</string>
               <key>NSPhotoLibraryUsageDescription</key>
               <string>Crown Builders requiere acceso a la galería para seleccionar la foto de perfil.</string>
           </dict>
-          </plist>'''
-
-          filepath = 'CrownBuilders/Platforms/iOS/Info.plist'
-          os.makedirs(os.path.dirname(filepath), exist_ok=True)
-          with open(filepath, 'w', encoding='utf-8') as f:
-              f.write(content.strip())
-
-          print('--- INFO.PLIST GENERADO EXITOSAMENTE ---')
-          "
+          </plist>
+          EOF
 
       - name: Restore Dependencies
         run: |
@@ -101,43 +86,17 @@ jobs:
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
-      - name: Publish iOS App (Release)
+      - name: Build iOS App (Release)
         run: |
-          dotnet publish CrownBuilders/CrownBuilders.csproj \
+          dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
-            /p:CodesignKey="Apple Distribution" \
-            /p:CodesignProvision="${{ env.PROVISIONING_UUID }}"
-
-      - name: Localizar y Copiar IPA a Output de Forma Exhaustiva
-        run: |
-          mkdir -p output
-          echo "Buscando archivos .ipa generados en el espacio de trabajo..."
-          find . -name "*.ipa"
-          
-          IPA_FILE=$(find . -name "*.ipa" | head -n 1)
-          if [ -n "$IPA_FILE" ]; then
-            cp "$IPA_FILE" output/CrownBuilders.ipa
-            echo "¡IPA localizado y copiado con éxito desde: $IPA_FILE!"
-          else
-            echo "Error: No se encontró ningún archivo .ipa."
-            exit 1
-          fi
-          
-          ls -la output/
+            /p:EnableAssemblyILStripping=false
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-release
-          path: output/*.ipa
-
-      - name: Upload App to TestFlight / App Store Connect
-        uses: apple-actions/upload-testflight-build@v1
-        with:
-          app-path: 'output/CrownBuilders.ipa'
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          path: CrownBuilders/bin/Release/net10.0-ios/ios-arm64/publish/*.ipa
