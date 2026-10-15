@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <CheckXcodeVersion>false</CheckXcodeVersion>
+    <CheckForSufficientXcodeVersion>false</CheckForSufficientXcodeVersion>
     <SkipXcodeVersionCheck>true</SkipXcodeVersionCheck>
     <ValidateXcodeVersion>false</ValidateXcodeVersion>
     <_SdkValidationSkip>true</_SdkValidationSkip>
-    <WarningsNotAsErrors>MT4162</WarningsNotAsErrors>
-    <NoWarn>$(NoWarn);MT4162</NoWarn>
+    <_XcodeVersion>27.0</_XcodeVersion>
+    <SelectedXcodeVersion>27.0</SelectedXcodeVersion>
   </PropertyGroup>
 </Project>
