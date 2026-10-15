@@ -1,0 +1,143 @@
+name: Build and Upload iOS App to TestFlight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-upload-ios:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode Version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install MAUI Workload
+        run: dotnet workload install maui
+
+      - name: Install Apple Certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          p12-password: ${{ secrets.P12_PASSWORD }}
+
+      - name: Install Provisioning Profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          PP_PATH="$RUNNER_TEMP/profile.mobileprovision"
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > "$PP_PATH"
+          
+          UUID=$(grep -a -A 1 '<key>UUID</key>' "$PP_PATH" | tail -n 1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          echo "UUID del perfil: $UUID"
+          
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          echo "PROVISIONING_UUID=$UUID" >> $GITHUB_ENV
+
+      - name: Corregir e Imprimir Info.plist
+        run: |
+          python3 -c "
+          import os
+
+          content = '''<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">
+          <plist version=\"1.0\">
+          <dict>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>CFBundleIconName</key>
+              <string>crownbuilders</string>
+              <key>UIDeviceFamily</key>
+              <array>
+                  <integer>1</integer>
+                  <integer>2</integer>
+              </array>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+              </array>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+              <key>UISupportedInterfaceOrientations~ipad</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+                  <string>UIInterfaceOrientationPortraitUpsideDown</string>
+                  <string>UIInterfaceOrientationLandscapeLeft</string>
+                  <string>UIInterfaceOrientationLandscapeRight</string>
+              </array>
+              <key>XSAppIconAssets</key>
+              <string>Assets.xcassets/crownbuilders.appiconset</string>
+
+              <key>NSCameraUsageDescription</key>
+              <string>Crown Builders requiere acceso a la cámara para tomar fotos de perfil y adjuntar avances de obra.</string>
+              <key>NSPhotoLibraryUsageDescription</key>
+              <string>Crown Builders requiere acceso a la galería para seleccionar la foto de perfil.</string>
+          </dict>
+          </plist>'''
+
+          filepath = 'CrownBuilders/Platforms/iOS/Info.plist'
+          os.makedirs(os.path.dirname(filepath), exist_ok=True)
+          with open(filepath, 'w', encoding='utf-8') as f:
+              f.write(content.strip())
+
+          print('--- INFO.PLIST GENERADO EXITOSAMENTE ---')
+          "
+
+      - name: Restore Dependencies
+        run: |
+          dotnet restore CrownBuilders/CrownBuilders.csproj \
+            /p:TargetFramework=net10.0-ios \
+            /p:EnableWindowsTargeting=true
+
+      - name: Publish iOS App (Release)
+        run: |
+          dotnet publish CrownBuilders/CrownBuilders.csproj \
+            -c Release \
+            -f net10.0-ios \
+            /p:EnableWindowsTargeting=true \
+            /p:ArchiveOnBuild=true \
+            /p:CodesignKey="Apple Distribution" \
+            /p:CodesignProvision="${{ env.PROVISIONING_UUID }}"
+
+      - name: Localizar y Copiar IPA a Output de Forma Exhaustiva
+        run: |
+          mkdir -p output
+          echo "Buscando archivos .ipa generados en el espacio de trabajo..."
+          find . -name "*.ipa"
+          
+          IPA_FILE=$(find . -name "*.ipa" | head -n 1)
+          if [ -n "$IPA_FILE" ]; then
+            cp "$IPA_FILE" output/CrownBuilders.ipa
+            echo "¡IPA localizado y copiado con éxito desde: $IPA_FILE!"
+          else
+            echo "Error: No se encontró ningún archivo .ipa."
+            exit 1
+          fi
+          
+          ls -la output/
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-release
+          path: output/*.ipa
+
+      - name: Upload App to TestFlight / App Store Connect
+        uses: apple-actions/upload-testflight-build@v1
+        with:
+          app-path: 'output/CrownBuilders.ipa'
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
