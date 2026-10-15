@@ -1,4 +1,4 @@
-name: Build iOS App
+Name: Build iOS App
 
 on:
   workflow_dispatch:
@@ -88,10 +88,11 @@ jobs:
 
       - name: Build iOS App (Release)
         run: |
-          dotnet build CrownBuilders/CrownBuilders.csproj \
+          dotnet publish CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
+            /p:BuildIpa=true \
             /p:ArchiveOnBuild=true \
             /p:EnableAssemblyILStripping=false
 
@@ -99,4 +100,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-release
-          path: CrownBuilders/bin/Release/net10.0-ios/ios-arm64/publish/*.ipa
+          path: CrownBuilders/bin/Release/net10.0-ios/**/*.ipa
