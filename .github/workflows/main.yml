@@ -101,3 +101,11 @@ jobs:
         with:
           name: ios-app-release
           path: CrownBuilders/bin/Release/net10.0-ios/
+
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: 'CrownBuilders/bin/Release/net10.0-ios/**/*.ipa'
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
