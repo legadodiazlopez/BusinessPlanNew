@@ -75,7 +75,7 @@ jobs:
               <key>NSCameraUsageDescription</key>
               <string>Crown Builders requiere acceso a la cámara para tomar fotos de perfil y adjuntar avances de obra.</string>
               <key>NSPhotoLibraryUsageDescription</key>
-              <string>Crown Builders requiere acceso al álbum para adjuntar imágenes.</string>
+              <string>Crown Builders requiere acceso a la galería para seleccionar la foto de perfil.</string>
           </dict>
           </plist>
           EOF
@@ -86,9 +86,9 @@ jobs:
             /p:TargetFramework=net10.0-ios \
             /p:EnableWindowsTargeting=true
 
-      - name: Build and Publish iOS App (Release)
+      - name: Build iOS App (Release)
         run: |
-          dotnet publish CrownBuilders/CrownBuilders.csproj \
+          dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
             /p:EnableWindowsTargeting=true \
