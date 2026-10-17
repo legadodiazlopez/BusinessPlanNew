@@ -35,12 +35,10 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/CrownBuilders_App_Store.mobileprovision
 
-      - name: Authenticate to App Store Connect
-        uses: apple-actions/import-app-store-connect-user-api-key@v1
-        with:
-          key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          key-content: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+      - name: Authenticate App Store Connect API Key
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" > ~/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
       - name: Regenerar Info.plist Limpio con Permisos de Apple
         run: |
