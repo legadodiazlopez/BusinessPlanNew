@@ -91,6 +91,7 @@ jobs:
           dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
             -f net10.0-ios \
+            -r ios-arm64 \
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
             /p:BuildIpa=true \
@@ -100,4 +101,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ios-app-release
-          path: CrownBuilders/bin/Release/net10.0-ios/
+          path: CrownBuilders/bin/Release/net10.0-ios/ios-arm64/
