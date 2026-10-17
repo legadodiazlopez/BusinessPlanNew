@@ -33,7 +33,7 @@ jobs:
       - name: Install Provisioning Profile
         run: |
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/CrownBuilders_App_Store.mobileprovision
+          echo "${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Regenerar Info.plist Limpio con Permisos de Apple
         run: |
@@ -96,7 +96,6 @@ jobs:
             /p:ArchiveOnBuild=true \
             /p:BuildIpa=true \
             /p:CodesignKey="Apple Distribution" \
-            /p:CodesignProvision="CrownBuilders_App_Store" \
             /p:EnableAssemblyILStripping=false
 
       - name: Upload IPA Artifact
