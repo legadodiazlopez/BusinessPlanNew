@@ -95,7 +95,6 @@ jobs:
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
             /p:BuildIpa=true \
-            /p:CodesignKey="Apple Distribution" \
             /p:CodesignProvision="CrownBuilders_App_Store" \
             /p:EnableAssemblyILStripping=false
 
