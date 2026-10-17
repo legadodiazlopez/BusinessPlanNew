@@ -87,6 +87,10 @@ jobs:
             /p:EnableWindowsTargeting=true
 
       - name: Build iOS App (Release)
+        env:
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
         run: |
           dotnet build CrownBuilders/CrownBuilders.csproj \
             -c Release \
@@ -95,6 +99,7 @@ jobs:
             /p:EnableWindowsTargeting=true \
             /p:ArchiveOnBuild=true \
             /p:BuildIpa=true \
+            /p:CodesignKey="Apple Distribution" \
             /p:CodesignProvision="CrownBuilders_App_Store" \
             /p:EnableAssemblyILStripping=false
 
